@@ -231,7 +231,12 @@ function openMusicSettings(back){
  refresh();
  setChoice(0);
 }
-function say(text){$('feedback').textContent=text;}
+function say(text=$('feedback').textContent){
+ const feedback=$('feedback'), prompt=$('operator-prompt');
+ const message=text.trim();
+ feedback.hidden=!message||(!prompt.hidden&&message===prompt.textContent.trim());
+ if(feedback.textContent!==text)feedback.textContent=text;
+}
 function intro(){
  music.setTheme(null);
  setTitleScreen(true);
@@ -619,7 +624,7 @@ function currentLab(){
 }
 function labDone(){return roomIndex===9?gardenBridge:passed;}
 function labReady(){
- if(!consulted.has(roomIndex)){say('Talk to '+operators[roomIndex][0]+' beside the controls.');return false;}
+ if(!consulted.has(roomIndex)){say(operatorPrompt());return false;}
  if(!recovered.has(roomIndex)){say(findPlan(roomIndex));return false;}
  return true;
 }
@@ -1340,7 +1345,7 @@ function walkMira(){
   if(step<route.length)requestAnimationFrame(walk);
   else{
    mira.walking=false;
-   if(roomIndex===0){say(reported.has(0)?'Mira is on the path. Ask her about the old survey route before heading north.':'Mira is on the path. Explain the lift repair to Sol, then check in with her.');renderActions();}
+   if(roomIndex===0){say(reported.has(0)?'Mira is on the path. Ask her about the old survey route before heading north.':'Mira is back on the path. Check in with her after your repair report.');renderActions();}
   }
  }
  requestAnimationFrame(walk);
@@ -1503,7 +1508,7 @@ function interact(){
   say(objective());return;
  }
  if(where==='console'){
-  if(needsReport(roomIndex))say('Report the fix to '+operators[roomIndex][0]+' by the console.');
+  if(needsReport(roomIndex))say(operatorPrompt());
   else discovery();
   return;
  }
@@ -1512,7 +1517,7 @@ function interact(){
 function lockedText(door){
  if(challengeLatch(door)){
   return needsReport(roomIndex)
-   ?'Explain the repair to '+operators[roomIndex][0]+' to reopen the gate.'
+   ?operatorPrompt()
    :'The gate stays shut until the mechanism works. The '+plans[roomIndex].name+' is still open.';
  }
  if(door.required.includes(-2))return 'The latch is on the far side. Reach Sandstone Pass by way of Stonebridge.';
@@ -1547,6 +1552,7 @@ function renderActions(){
  const promptElement=$('operator-prompt');
  if(promptElement.textContent!==prompt)promptElement.textContent=prompt;
  promptElement.hidden=!prompt;
+ say();
  syncUtilityButtons();
 }
 const conversations={

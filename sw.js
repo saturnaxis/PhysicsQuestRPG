@@ -1,7 +1,7 @@
 'use strict';
 
 // BEGIN GENERATED PRECACHE
-const buildVersion = "1039136d1e3f46c442ec";
+const buildVersion = "355208e18501c76f64c3";
 const assets = [
   "art/cart.png",
   "art/foreground.png",
