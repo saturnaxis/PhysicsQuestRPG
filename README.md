@@ -6,7 +6,7 @@ This is the static, installable edition of Mechanics Castle, including the optio
 
 1. Extract the ZIP and commit its contents to the publishing location in your repository. Make sure `index.html` and `.nojekyll` are at the top of that location.
 2. Open **Settings → Pages**. Choose **Deploy from a branch**, then choose your branch and **/(root)**. If you put the files in `docs/`, choose **/docs** instead.
-3. Open the published HTTPS URL. Wait for **Offline ready** before disconnecting. The first visit downloads the game, art, and music. Install the app from your browser to launch fullscreen on supported devices. In a regular browser tab, the first game interaction requests fullscreen where available. The Fullscreen button can also enter or exit fullscreen. Touchscreen controls stay below the game in portrait and landscape.
+3. Open the published HTTPS URL. Wait for **Offline ready** before disconnecting. The first visit downloads the game, art, and music. Install the app from your browser to launch fullscreen on supported devices. In a regular browser tab, the first game interaction requests fullscreen where available. The Fullscreen button can also enter or exit fullscreen. The game stays centered at its full available size. Touchscreen controls sit in the side gutters when they fit and use the lower edges on tighter screens.
 
 Progress and settings are saved in the browser. A new GitHub Pages origin starts with a fresh save. This package uses the same game save format as the hosted version.
 

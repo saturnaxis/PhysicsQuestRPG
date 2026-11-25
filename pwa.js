@@ -60,3 +60,21 @@ document.addEventListener('fullscreenchange', syncScreenButton);
 document.addEventListener('webkitfullscreenchange', syncScreenButton);
 nativeFullscreen.addEventListener?.('change', syncScreenButton);
 syncScreenButton();
+
+function placeTouchControls(frame, canvas, width, height) {
+  const aspect = canvas.width / canvas.height;
+  const side = Math.max(0, (width - height * aspect) / 2);
+  const vertical = Math.max(0, (height - width / aspect) / 2);
+  const layout = side >= 150 && height >= 200 ? 'wide-sides' :
+    side >= 56 && height >= 200 ? 'compact-sides' : vertical >= 100 ? 'letterbox' : 'overlay';
+  frame.dataset.touchLayout = layout;
+  frame.style.setProperty('--side-gutter', side + 'px');
+  frame.style.setProperty('--vertical-gutter', vertical + 'px');
+}
+
+const playfield = document.querySelector('.frame');
+const gameCanvas = playfield.querySelector('canvas');
+const resizeControls = () => placeTouchControls(playfield, gameCanvas, playfield.clientWidth, playfield.clientHeight);
+if ('ResizeObserver' in window) new ResizeObserver(resizeControls).observe(playfield);
+else window.addEventListener('resize', resizeControls);
+resizeControls();
