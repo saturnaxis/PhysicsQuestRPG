@@ -86,8 +86,7 @@
 </head><body><main><header><div><small>PHYSICS QUEST</small><h1>Mechanics Castle</h1></div><div class="app-tools"><p id="offline-status" role="status" hidden></p><button id="screen-mode" type="button" hidden>Fullscreen</button></div></header>
 <section class="stage" aria-label="Mechanics Castle game"><div class="frame"><canvas width="720" height="360" aria-label="Top-down view of the current room"></canvas><div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Game dialogue"></div></div><div class="touch" role="group" aria-label="Touchscreen game controls"><div class="pad" role="group" aria-label="Directional pad"><button data-key="ArrowLeft" aria-label="Left">←</button><button data-key="ArrowUp" aria-label="Up">↑</button><button data-key="ArrowDown" aria-label="Down">↓</button><button data-key="ArrowRight" aria-label="Right">→</button></div><div class="choices controller-actions"><button id="interact"><kbd>E</kbd> Select</button><button id="card" hidden><kbd>C</kbd> Back / Card</button><button id="notes" hidden><kbd>N</kbd> Research</button><button id="menu" hidden><kbd>P</kbd> Menu</button></div></div></div>
 <div class="status" id="status" hidden>
-  <div class="status-copy"><div class="topline"><h2 id="room"></h2><span class="tag" id="floor"></span></div><div class="meter" id="completion" role="progressbar" aria-label="Mechanics Castle completion" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="progress"></span></div><div class="status-message"><p class="operator-prompt" id="operator-prompt" aria-live="polite" hidden></p><p id="feedback" aria-live="polite"></p></div></div>
-  <div class="actions" id="actions" role="group" aria-label="Nearby actions"></div>
+  <div class="status-copy"><div class="topline"><h2 id="room"></h2><span class="tag" id="floor"></span></div><div class="meter" id="completion" role="progressbar" aria-label="Mechanics Castle completion" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="progress"></span></div><div class="status-message" id="status-message" tabindex="0"><p class="operator-prompt" id="operator-prompt" aria-live="polite" hidden></p><p id="feedback" aria-live="polite"></p></div><button class="status-expand" id="status-expand" type="button" aria-controls="status-message" aria-expanded="false">More</button></div>
 </div></section>
 </main>
 <script src="audio/music-manager.js"></script>
@@ -141,7 +140,7 @@ function bringIntoView(choice){
 }
 function menuButtons(){
  if(!$('modal').hidden)return [...$('sheet').querySelectorAll('button, summary')].filter(item=>!item.disabled);
- return choosing?[...$('actions').children].filter(item=>!item.disabled):[];
+ return [];
 }
 function setChoice(index){
  const choices=menuButtons();
@@ -170,7 +169,14 @@ function cancelChoice(){
  discovery();
 }
 const close=()=>{speech=null;$('sheet').classList.remove('vista','research-sheet','robot-story','speaker-sheet','field-sheet');$('modal').hidden=true;keys.clear();syncUtilityButtons();$('interact').focus({preventScroll:true});};
+function showRoomMessages(expanded){
+ const button=$('status-expand');
+ $('status-message').classList.toggle('expanded',expanded);
+ button.setAttribute('aria-expanded',String(expanded));
+ button.textContent=expanded?'Less':'More';
+}
 function dialog(html,{focus=true}={}){
+ showRoomMessages(false);
  speech=null;
  $('sheet').classList.remove('research-sheet','robot-story','speaker-sheet','field-sheet');
  keys.clear();padKeys.clear();choiceIndex=0;$('sheet').innerHTML=html;$('modal').hidden=false;syncUtilityButtons();
@@ -326,7 +332,10 @@ function takeReading(lab,control){
 function goBack(){
  if(canSelect()||currentLab()?.carry)cancelChoice();
 }
-const inputActions={e:confirmChoice,c:cancelChoice,escape:goBack,n:useResearchTool,p:repairFrontMenu,x:useResearchTool};
+const inputActions={e:confirmChoice,c:cancelChoice,escape:()=>{
+ if($('status-expand').getAttribute('aria-expanded')==='true')showRoomMessages(false);
+ else goBack();
+},n:useResearchTool,p:repairFrontMenu,x:useResearchTool};
 const bindings={w:'ArrowUp',a:'ArrowLeft',s:'ArrowDown',d:'ArrowRight'};
 window.addEventListener('keydown',e=>{
  const key=e.key.toLowerCase();
@@ -342,6 +351,7 @@ window.addEventListener('keydown',e=>{
  if(action){e.preventDefault();if(!e.repeat)action();}
  if(e.repeat&&['Enter',' '].includes(e.key))e.preventDefault();
 });
+$('status-expand').onclick=()=>showRoomMessages($('status-expand').getAttribute('aria-expanded')!=='true');
 window.addEventListener('keyup',e=>keys.delete(bindings[e.key.toLowerCase()]||e.key));
 window.addEventListener('blur',()=>keys.clear());
 document.querySelectorAll('[data-key]').forEach(el=>{
@@ -1130,7 +1140,12 @@ function syncUtilityButtons(){
  $('notes').hidden=unavailable;
  $('menu').hidden=unavailable;
  const verb=speech&&!speech.complete?'Reveal':!$('modal').hidden||onTitle?'Select':busy?'Wait':choosing?'Test':'Interact';
- $('interact').lastChild.textContent=' '+verb;
+ const target=canMove()?activeInteraction():null;
+ const label=target?interactionLabel(target):verb;
+ const interactButton=$('interact');
+ interactButton.lastChild.textContent=' '+label.split(' ')[0];
+ interactButton.setAttribute('aria-label',label);
+ interactButton.title=label;
 }
 function setTitleScreen(active){
  onTitle=active;
@@ -1379,6 +1394,7 @@ const enter=(index,entry)=>{
  if(avatar&&animation&&roomIndex!==6)attempts.set(roomIndex,animation);
  originalLoad(index);
  roomEntry=entry||null;
+ showRoomMessages(false);
  visited.add(index);
  passed=solved.has(index);
  animation=attempts.get(index)||null;
@@ -1503,43 +1519,35 @@ function lockedText(door){
  if(door.required.includes(-1))return 'The guardian’s diagnostic terminal controls this door.';
  return 'Locked · '+door.required.filter(index=>!reported.has(index)).map(index=>rooms[index].name).join(' and ')+' still need attention.';
 }
-function renderActions(){
- syncUtilityButtons();
- const actions=$('actions');
- if(passed)choosing=false;
- if(passed&&room().kind&&!solved.has(roomIndex)){
-  solved.add(roomIndex);
+function interactionLabel(target){
+ switch(target.kind){
+  case 'lab': {
+   const measure=recovered.has(roomIndex)&&consulted.has(roomIndex)&&readingRequired(roomIndex)&&target.control.id!=='reset';
+   return measure?'Use '+scienceLabs.instrumentByRoom[roomIndex].toLowerCase():target.control.label;
+  }
+  case 'field': return 'Study the '+target.point.name.toLowerCase();
+  case 'operator': return needsReport(roomIndex)?'Explain the repair':'Talk to '+operators[roomIndex][0];
+  case 'talk': return 'Talk';
+  case 'student': return 'Listen to '+target.point.name;
+  case 'plan': return (recovered.has(room().planOwner)?'Review ':'Inspect ')+target.point.name;
+  case 'marker': return 'Read the survey marker';
+  case 'exit': return 'Read diagnostics';
+  case 'arrival': return 'Inspect observatory entrance';
+  case 'console': return needsReport(roomIndex)?'Report to the operator':'Review the plan';
+  case 'door':
+   if(isOpen(target.door))return 'Enter '+rooms[target.door.to].name;
+   return roomIndex===12&&target.door.dir==='south'?'Lift the service gate latch':'Inspect closed gate';
+  default: return 'Interact';
  }
+}
+function renderActions(){
+ if(passed)choosing=false;
+ if(passed&&room().kind&&!solved.has(roomIndex))solved.add(roomIndex);
  const prompt=operatorPrompt();
  const promptElement=$('operator-prompt');
  if(promptElement.textContent!==prompt)promptElement.textContent=prompt;
  promptElement.hidden=!prompt;
- const lab=currentLab();
- if(lab&&(busy||choosing)){
-  actions.replaceChildren();
-  if(!busy){button(actions,'Test setting',runLabDial,'gold');button(actions,'Back',cancelLabControl);}
-  return;
- }
- const target=activeInteraction(), where=target?.kind;
- actions.replaceChildren();
- if(where==='lab'){
-  const measure=recovered.has(roomIndex)&&consulted.has(roomIndex)&&readingRequired(roomIndex)&&target.control.id!=='reset';
-  button(actions,measure?'Use '+scienceLabs.instrumentByRoom[roomIndex].toLowerCase():target.control.label,interact,'gold');
- }
- if(where==='console'&&passed)button(actions,needsReport(roomIndex)?'Report to the operator':'Review the plan',needsReport(roomIndex)?interact:discovery);
- if(where==='door'){
-  const door=target.door;
-  const open=isOpen(door);
-  button(actions,open?'Enter '+rooms[door.to].name:roomIndex===12&&door.dir==='south'?'Lift the service gate latch':'Inspect closed gate',interact,open?'gold':'');
- }
- if(where==='plan')button(actions,recovered.has(room().planOwner)?'Review '+nearbySource().name:'Inspect '+nearbySource().name,interact,'gold');
- if(where==='marker')button(actions,'Read the survey marker',interact,'gold');
- if(where==='operator')button(actions,needsReport(roomIndex)?'Explain the repair':'Talk to '+operators[roomIndex][0],interact,'gold');
- if(where==='talk')button(actions,'Talk',interact,'gold');
- if(where==='student')button(actions,'Listen to '+target.point.name,interact,'gold');
- if(where==='exit')button(actions,'Read diagnostics',interact,'gold');
- if(where==='arrival')button(actions,'Inspect observatory entrance',interact,'gold');
- if(where==='field')button(actions,'Investigate '+target.point.name.toLowerCase(),interact,'gold');
+ syncUtilityButtons();
 }
 const conversations={
  8:{name:'Mechanic Ada',greeting:'The second floor is still waiting for both safety checks.',topics:[
