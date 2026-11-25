@@ -1,7 +1,7 @@
 'use strict';
 
 // BEGIN GENERATED PRECACHE
-const buildVersion = "6d8438f60792c2e6455b";
+const buildVersion = "caf8a67b0c902ce0dfc7";
 const assets = [
   "art/cart.png",
   "art/foreground.png",
@@ -113,6 +113,7 @@ const assets = [
   "index.html",
   "manifest.webmanifest",
   "portraits.js",
+  "pwa-layout.css",
   "pwa.js",
   "scenery.js",
   "science-labs.js",

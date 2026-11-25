@@ -20,3 +20,43 @@ if ('serviceWorker' in navigator) {
     return navigator.serviceWorker.ready;
   }).then(() => say('Offline ready')).catch(() => say('Offline setup unavailable'));
 }
+
+const screenMode = document.getElementById('screen-mode');
+const screenRoot = document.documentElement;
+const enterFullscreen = screenRoot.requestFullscreen || screenRoot.webkitRequestFullscreen;
+const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+const nativeFullscreen = window.matchMedia('(display-mode: fullscreen)');
+const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+
+function syncScreenButton() {
+  const active = Boolean(fullscreenElement());
+  const allowed = document.fullscreenEnabled ?? document.webkitFullscreenEnabled ?? Boolean(enterFullscreen);
+  screenMode.hidden = !(active && exitFullscreen || allowed && enterFullscreen && !nativeFullscreen.matches);
+  screenMode.textContent = active ? 'Exit fullscreen' : 'Fullscreen';
+}
+
+function requestScreen() {
+  if (screenMode.hidden || fullscreenElement()) return;
+  try {
+    Promise.resolve(enterFullscreen.call(screenRoot)).catch(() => {});
+  } catch {
+    // Some browsers restrict fullscreen in embedded windows.
+  }
+}
+
+screenMode.addEventListener('click', () => {
+  if (fullscreenElement()) {
+    try {
+      Promise.resolve(exitFullscreen.call(document)).catch(() => {});
+    } catch {
+      // The browser may have already left fullscreen.
+    }
+  } else requestScreen();
+});
+document.addEventListener('click', event => {
+  if (!event.target.closest('#screen-mode')) requestScreen();
+}, { capture: true, once: true });
+document.addEventListener('fullscreenchange', syncScreenButton);
+document.addEventListener('webkitfullscreenchange', syncScreenButton);
+nativeFullscreen.addEventListener?.('change', syncScreenButton);
+syncScreenButton();
