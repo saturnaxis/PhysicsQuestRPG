@@ -49,12 +49,37 @@ header, .touch {
   aspect-ratio: auto;
   object-fit: contain;
 }
-.status {
-  flex: 0 1 auto;
+.status:not([hidden]) {
+  --status-height: clamp(92px, 14dvh, 112px);
+  flex: 0 0 var(--status-height);
   min-height: 0;
-  max-height: 30%;
-  overflow: auto;
+  max-height: 36%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, min(30%, 20rem));
+  grid-template-rows: minmax(0, 1fr);
+  column-gap: 16px;
   padding: 8px 12px;
+}
+.status-copy,
+.status .actions {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.status-copy {
+  overscroll-behavior: contain;
+}
+.status .actions {
+  align-content: start;
+  align-items: start;
+  justify-content: flex-start;
+  padding: 3px;
+}
+.status .actions button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 .sheet {
   min-height: 0;
@@ -168,10 +193,107 @@ header, .touch {
 @media (max-width: 480px) {
   .touch .controller-actions button { padding-inline: 4px; }
 }
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 500px),
+       (orientation: landscape) and (max-height: 600px) and (any-pointer: coarse) {
+  body > main {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 44px minmax(0, 1fr);
+    gap: 3px;
+    padding: max(3px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right)) max(3px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+  }
+  .stage { display: contents; }
+  header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
   header small { display: none; }
   header h1 { font-size: 1.25rem; }
-  .status .actions { display: none; }
-  .status .meter { margin: 4px 0; }
+  main:has(.status:not([hidden])) header {
+    grid-column: 2;
+  }
+  main:has(.status:not([hidden])) header > :first-child {
+    display: none;
+  }
+  main:has(.status:not([hidden])) #offline-status {
+    display: none;
+  }
+  #screen-mode {
+    padding: 2px 7px;
+    font-size: .8rem;
+  }
+  .frame {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    overflow: hidden;
+    border-radius: 7px;
+  }
+  .status:not([hidden]) {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: minmax(0, 1fr) minmax(5rem, min(29%, 13rem));
+    max-height: none;
+    column-gap: 5px;
+    background: #17241c;
+    border-radius: 4px;
+    padding: 2px 5px;
+  }
+  .status-copy {
+    display: grid;
+    grid-template-columns: minmax(68px, min(27%, 9rem)) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 2px;
+    column-gap: 7px;
+    overflow: hidden;
+  }
+  .status .topline {
+    min-width: 0;
+    align-items: center;
+  }
+  .status #room {
+    min-width: 0;
+    font-size: .9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status #floor {
+    display: none;
+  }
+  .status .meter {
+    grid-area: 2 / 1;
+    height: 2px;
+    margin: 0;
+  }
+  .status-message {
+    grid-area: 1 / 2 / 3 / 3;
+    overflow: auto;
+    scrollbar-width: thin;
+  }
+  .status-message p {
+    margin: 0 0 2px;
+    font-size: .82rem;
+    line-height: 1.25;
+  }
+  .status .actions {
+    flex-wrap: nowrap;
+    padding: 2px;
+  }
+  .status .actions button {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 3px 6px;
+    font-size: .8rem;
+  }
   .modal { padding: 5px; }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  .status:not([hidden]) {
+    --status-height: clamp(124px, 22dvh, 146px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 45px;
+    row-gap: 3px;
+  }
+  .status .actions button {
+    padding-block: 5px;
+  }
 }

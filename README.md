@@ -10,6 +10,12 @@ This is the static, installable edition of Mechanics Castle, including the optio
 
 Progress and settings are saved in the browser. A new GitHub Pages origin starts with a fresh save. This package uses the same game save format as the hosted version.
 
+## Verify Google Tag Manager
+
+The page loads the web container `GTM-M3294GNF`. Use **Preview** from that container in Google Tag Manager and connect to the exact published HTTPS game URL in a regular browser tab. Use a fresh browser profile or close all copies of the game and reopen it online so an older offline cache cannot serve the previous page. Keep content blockers disabled for the test.
+
+If Tag Assistant connects to the container but your Google Analytics tag is missing, check that the container has a **Google tag** with the GA4 web stream’s `G-…` measurement ID and the **Initialization – All Pages** trigger. Test it in Preview, then publish the container. Analytics requests need an internet connection.
+
 ## Update the offline files
 
 When you edit the game or its assets, run `python3 tools/refresh-pwa-cache.py` (Python 3.11+) and commit the updated `sw.js` with your files. Add any new asset types or locations to the script so they are available offline. After an update, close all open copies of the game and reopen it online to let the new worker take over.
