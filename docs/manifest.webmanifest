@@ -1,0 +1,16 @@
+{
+  "name": "Physics Quest · Mechanics Castle",
+  "short_name": "Mechanics Castle",
+  "description": "Repair the castle's machinery, restore the Flywheel Guardian, and investigate physics in the valley.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "background_color": "#101813",
+  "theme_color": "#101813",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
