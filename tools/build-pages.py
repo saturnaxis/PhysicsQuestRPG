@@ -20,17 +20,18 @@ def refresh_cache(root):
         if file.is_file() and file.suffix in extensions and file != worker
     )
 
-    version = hashlib.sha256()
-    for path in paths:
-        version.update(path.encode("utf-8") + b"\0")
-        with (root / path).open("rb") as stream:
-            version.update(hashlib.file_digest(stream, "sha256").digest())
-
     marker = "// BEGIN GENERATED PRECACHE\n"
     end = "// END GENERATED PRECACHE"
     source = worker.read_text(encoding="utf-8")
     prefix, generated = source.split(marker, 1)
     _, suffix = generated.split(end, 1)
+
+    version = hashlib.sha256((prefix + suffix).encode("utf-8"))
+    for path in paths:
+        version.update(path.encode("utf-8") + b"\0")
+        with (root / path).open("rb") as stream:
+            version.update(hashlib.file_digest(stream, "sha256").digest())
+
     build = f"const buildVersion = {json.dumps(version.hexdigest()[:20])};\n"
     assets = f"const assets = {json.dumps(paths, indent=2)};\n"
     worker.write_text(prefix + marker + build + assets + end + suffix, encoding="utf-8")

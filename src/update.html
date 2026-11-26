@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101813">
+<title>Update Physics Quest</title>
+<style>
+body{margin:0;background:#101813;color:#f4ead0;font:1rem/1.5 system-ui,sans-serif}
+main{max-width:30rem;margin:12vh auto;padding:0 1.25rem}
+h1{font-family:Georgia,serif;color:#f1d38f}
+a{color:#f1d38f}
+</style>
+</head>
+<body>
+<main>
+<h1>Update Physics Quest</h1>
+<p id="update-status" role="status">Checking for the latest game files…</p>
+<p>Your saved game stays on this device.</p>
+<p><a href="./">Back to Physics Quest</a></p>
+</main>
+<script>
+'use strict';
+
+const statusMessage = document.getElementById('update-status');
+const worker = navigator.serviceWorker;
+const game = new URL('./', location.href);
+const params = new URLSearchParams(location.search);
+if (params.get('test') === 'observatory') game.searchParams.set('test','observatory');
+document.querySelector('main a').href = game.href;
+
+async function updateGame() {
+  if (!worker) {
+    statusMessage.textContent = 'This browser does not support offline updates. Open the game while online.';
+    return;
+  }
+  const registration = await worker.register('./sw.js', { scope: './', updateViaCache: 'none' });
+  let activated = false;
+  const openGame = () => {
+    if (activated) return;
+    activated = true;
+    location.replace(game.href);
+  };
+  worker.addEventListener('controllerchange', openGame, { once: true });
+
+  const watch = installing => {
+    if (!installing) return;
+    function check() {
+      if (installing.state === 'installed') installing.postMessage('activate-update');
+      if (installing.state === 'activated' && worker.controller === installing) openGame();
+      if (installing.state === 'redundant' && installing !== registration.active) {
+        statusMessage.textContent = 'The update could not finish. Check your connection and reload this page.';
+      }
+    }
+    installing.addEventListener('statechange', check);
+    check();
+  };
+  registration.addEventListener('updatefound', () => watch(registration.installing));
+  await registration.update();
+  if (activated) return;
+  if (registration.waiting) watch(registration.waiting);
+  else if (registration.installing) watch(registration.installing);
+  else if (registration.active) openGame();
+}
+updateGame().catch(() => {
+  statusMessage.textContent = 'The update could not finish. Check your connection and reload this page.';
+});
+</script>
+</body>
+</html>

@@ -71,6 +71,40 @@ const scienceLabs = (() => {
   }
   return lab;
  }
+ function snapshot(lab){
+  const {carry,load,calibrated,values,piston,cartIndex,brakes,heading,attempts,lastTrial,lastFeedback}=lab;
+  return {carry,load,calibrated,values:{...values},piston,cartIndex,brakes,heading,attempts:{...attempts},lastTrial,lastFeedback};
+ }
+ function restore(room,data,now){
+  const lab=make(room);
+  const weights=storedWeights[room]?.map(item=>item.weight??item.mass)||[];
+  if(weights.includes(data.load))lab.load=data.load;
+  if(weights.includes(data.carry)&&data.carry!==lab.load)lab.carry=data.carry;
+  lab.calibrated=room===2&&lab.load===4&&data.calibrated===true;
+  if(room===5&&[0,1].includes(data.piston))lab.piston=data.piston;
+  if(room===6){
+   if([0,1].includes(data.cartIndex))lab.cartIndex=data.cartIndex;
+   if(data.brakes===1){lab.brakes=1;lab.heading=-1;}
+  }
+  for(const [key,{minimum,maximum,step}] of Object.entries(controls)){
+   const value=data.values?.[key];
+   if(Number.isFinite(value)&&value>=minimum&&value<=maximum)lab.values[key]=number(minimum+Math.round((value-minimum)/step)*step);
+  }
+  for(const key of Object.keys(hints)){
+   if(Number.isInteger(data.attempts?.[key])&&data.attempts[key]>0)lab.attempts[key]=Math.min(1000,data.attempts[key]);
+  }
+  if(typeof data.lastFeedback==='string'&&data.lastFeedback.length<=600)lab.lastFeedback=data.lastFeedback;
+  const trial=data.lastTrial;
+  if(room===1&&Number.isInteger(trial?.index)&&surfaces[trial.index]){
+   lab.lastTrial={index:trial.index};
+   lab.trial={...friction(trial.index),index:trial.index,key:'friction',started:now-10};
+  }
+  if(room===3&&Number.isFinite(trial?.speed)&&trial.speed>=1&&trial.speed<=4){
+   lab.lastTrial={speed:trial.speed};
+   lab.trial={...collision(trial.speed),key:'momentum',started:now-10};
+  }
+  return lab;
+ }
  function pistonForce(kPa,index){return kPa*equipment.pistons[index].area/10;}
  function liftDifference(weight){return weight-520;}
  function brakeMomenta(cartIndex,side,heading){
@@ -297,5 +331,5 @@ const scienceLabs = (() => {
   }
  }
 
- return {title,goals,equipment,instruments,instrumentByRoom,requiredReadings,measurements,make,goal,targets,rackWeights,resetConsole,adjust,readout,result,number,acceleration,friction,collision,force,netForceLabel,torque,pistonForce,liftDifference,brakeMomenta,crankTorque,draw};
+ return {snapshot,restore,title,goals,equipment,instruments,instrumentByRoom,requiredReadings,measurements,make,goal,targets,rackWeights,resetConsole,adjust,readout,result,number,acceleration,friction,collision,force,netForceLabel,torque,pistonForce,liftDifference,brakeMomenta,crankTorque,draw};
 })();

@@ -7,18 +7,27 @@ if ('serviceWorker' in navigator) {
     status.hidden = false;
   };
 
+  const update = document.getElementById('game-update');
   say('Preparing offline play…');
   navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' }).then(registration => {
+    const showWaiting = () => {
+      update.hidden = !registration.waiting;
+      if (registration.waiting) say('Game update available');
+    };
     const watchInstall = () => {
       const worker = registration.installing;
       worker?.addEventListener('statechange', () => {
+        if (worker.state === 'installed') showWaiting();
         if (worker.state === 'redundant' && !registration.active) say('Offline setup incomplete. Reopen while online to retry.');
       });
     };
+    showWaiting();
     watchInstall();
     registration.addEventListener('updatefound', watchInstall);
-    return navigator.serviceWorker.ready;
-  }).then(() => say('Offline ready')).catch(() => say('Offline setup unavailable'));
+    navigator.serviceWorker.ready.then(() => {
+      if (!registration.waiting) say('Offline ready');
+    });
+  }).catch(() => say('Offline setup unavailable'));
 }
 
 const screenMode = document.getElementById('screen-mode');
@@ -54,27 +63,39 @@ screenMode.addEventListener('click', () => {
   } else requestScreen();
 });
 document.addEventListener('click', event => {
-  if (!event.target.closest('#screen-mode')) requestScreen();
+  if (!event.target.closest('#screen-mode, #touch-mode')) requestScreen();
 }, { capture: true, once: true });
 document.addEventListener('fullscreenchange', syncScreenButton);
 document.addEventListener('webkitfullscreenchange', syncScreenButton);
 nativeFullscreen.addEventListener?.('change', syncScreenButton);
 syncScreenButton();
 
-function placeTouchControls(frame, canvas, width, height) {
-  const aspect = canvas.width / canvas.height;
-  const side = Math.max(0, (width - height * aspect) / 2);
-  const vertical = Math.max(0, (height - width / aspect) / 2);
-  const layout = side >= 150 && height >= 200 ? 'wide-sides' :
-    side >= 56 && height >= 200 ? 'compact-sides' : vertical >= 100 ? 'letterbox' : 'overlay';
-  frame.dataset.touchLayout = layout;
-  frame.style.setProperty('--side-gutter', side + 'px');
-  frame.style.setProperty('--vertical-gutter', vertical + 'px');
+const playfield = document.querySelector('.frame');
+const touchMode = document.getElementById('touch-mode');
+let autoTouch = false;
+let touchInUse = false;
+try { autoTouch = localStorage.getItem('physics-quest-touch-mode') === 'auto'; } catch {}
+
+function syncTouchMode() {
+  playfield.dataset.controlsHidden = autoTouch && !touchInUse ? 'true' : 'false';
+  touchMode.textContent = autoTouch ? 'Touch: auto' : 'Touch: on';
+  touchMode.setAttribute('aria-label', autoTouch ? 'Touch controls automatic' : 'Touch controls always visible');
 }
 
-const playfield = document.querySelector('.frame');
-const gameCanvas = playfield.querySelector('canvas');
-const resizeControls = () => placeTouchControls(playfield, gameCanvas, playfield.clientWidth, playfield.clientHeight);
-if ('ResizeObserver' in window) new ResizeObserver(resizeControls).observe(playfield);
-else window.addEventListener('resize', resizeControls);
-resizeControls();
+touchMode.addEventListener('click', () => {
+  autoTouch = !autoTouch;
+  touchInUse = false;
+  try { localStorage.setItem('physics-quest-touch-mode', autoTouch ? 'auto' : 'on'); } catch {}
+  syncTouchMode();
+});
+window.addEventListener('pointerdown', event => {
+  if (!autoTouch || event.pointerType !== 'touch' || touchInUse) return;
+  touchInUse = true;
+  syncTouchMode();
+}, { passive: true });
+window.addEventListener('keydown', () => {
+  if (!autoTouch || !touchInUse) return;
+  touchInUse = false;
+  syncTouchMode();
+});
+syncTouchMode();

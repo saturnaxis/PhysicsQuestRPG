@@ -1,7 +1,14 @@
 'use strict';
 
+const castleThemes = ['mechanics_exterior','mechanics_interior','challenge_room','overworld'];
+const observatoryThemes = ['observatory_lobby','observatory_challenge','observatory_study','observatory_signal'];
+
 function chapterTheme(index, castleComplete) {
- if (index >= 10 && index < 16) return 'overworld';
+ if (index === observatory.lobby) return 'observatory_lobby';
+ if (index === observatory.secret) return 'observatory_signal';
+ const floor = observatory.floorFor(index);
+ if (floor) return floor.room === index ? 'observatory_challenge' : 'observatory_study';
+ if ((index >= 10 && index < 16) || index === observatory.offworld) return 'overworld';
  if (index === 0 || index === 9) return castleComplete ? 'overworld' : 'mechanics_exterior';
  if (index >= 1 && index <= 6) return 'challenge_room';
  return 'mechanics_interior';
@@ -24,6 +31,7 @@ class BackgroundMusic {
   this.positions = new Map();
   this.active = true;
   this.request = 0;
+  this.warmPass = 0;
   try {
    const preferences = JSON.parse(localStorage.getItem(BackgroundMusic.settingsKey));
    if (Number.isFinite(preferences?.volume)) this.volume = Math.max(0, Math.min(100, preferences.volume));
@@ -51,6 +59,10 @@ class BackgroundMusic {
  playDiscoveryCue() { this.playCue(523.25, 659.25, .16); }
  playDoorCue() { this.playCue(220, 293.66, .09); }
  playRepairCue() { this.playCue(659.25, 880, .18); }
+ playObservatoryCue(gate = false) {
+  this.playCue(440, 659.25, .12);
+  this.playCue(783.99, gate ? 1174.66 : 880, .14, .11);
+ }
  playBlockCue() { this.playCue(146.83, 92.5, .08); }
  playPlateCue() { this.playCue(392, 523.25, .10, .22); }
 
@@ -161,15 +173,21 @@ class BackgroundMusic {
  }
 
  warmCache() {
-  if (this.warming) return;
-  this.warming = true;
-  const themes = ['mechanics_exterior','mechanics_interior','challenge_room','overworld'];
+  const group = observatoryThemes.includes(this.current.theme) ? observatoryThemes : castleThemes;
+  if (this.warming === group) return;
+  this.warming = group;
+  const pass = ++this.warmPass;
+  // The outgoing source already holds its buffer. Keep decoded tracks for the current chapter only.
+  for (const theme of this.pending.keys()) {
+   if (!group.includes(theme)) this.pending.delete(theme);
+  }
+  const themes = group.filter(theme => theme !== this.current.theme);
   const idle = callback => window.requestIdleCallback ? window.requestIdleCallback(callback) : setTimeout(callback, 250);
   const next = () => {
-   if (!this.active || this.context.state !== 'running') { this.warming = false; return; }
+   if (this.warmPass !== pass) return;
+   if (!this.active || this.context.state !== 'running') { this.warming = null; return; }
    const theme = themes.shift();
    if (theme) this.load(theme).catch(() => {}).finally(() => idle(next));
-   else this.warming = false;
   };
   idle(next);
  }

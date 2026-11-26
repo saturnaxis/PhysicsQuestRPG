@@ -50,12 +50,23 @@
 .journal-list{display:grid;gap:6px;margin:8px 0}.journal-list button{text-align:left}
 .journal-checks{padding-left:22px}.journal-checks li{margin:5px 0}.journal-checks .done{color:#b9d4a0}
 .instrument-reading{font-variant-numeric:tabular-nums}.instrument-reading li{margin:6px 0}
-.sheet.field-sheet{width:min(650px,100%);padding:clamp(11px,2vw,23px);font-variant-numeric:tabular-nums}
-.field-sheet p{margin:7px 0 10px}
+.sheet.field-sheet,.sheet.relay-sheet{width:min(650px,100%);padding:clamp(11px,2vw,23px);font-variant-numeric:tabular-nums}
+.field-sheet p,.relay-sheet p{margin:7px 0 10px}
 .frame:has(.field-sheet)>canvas{min-height:430px}
 #field-diagram{width:100%;max-height:195px;aspect-ratio:540/226;object-fit:contain;image-rendering:auto;background:#142721;border:1px solid #597567;border-radius:5px}
 .field-actions{margin-top:10px}
-@media(max-width:600px){.field-sheet button{padding:8px 10px}}
+#observatory-opening{display:block;width:100%;max-height:min(26dvh,164px);object-fit:contain;background:#142330;border:1px solid #597567;border-radius:5px}
+.observatory-readings{width:100%;border-collapse:collapse;margin:6px 0 16px;font-size:.88rem;text-align:left}
+.observatory-readings th,.observatory-readings td{border-bottom:1px solid #586b57;padding:5px;vertical-align:top}
+.observatory-readings th{color:#ffdf99}
+.trial-readings{padding-left:22px;margin:8px 0}
+.report-trials{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 12px;font-variant-numeric:tabular-nums}
+.report-trial{padding:8px 10px;border:1px solid #768b93;border-radius:5px;background:#202d3a;overflow-wrap:anywhere}
+.report-trial h3{font:700 .95rem system-ui,sans-serif;color:#ffdf99}
+.report-trial p{margin:4px 0;line-height:1.35}.report-trial small{display:block;font-size:.88rem}
+.report-feedback{padding:8px 10px;border-left:3px solid #edc779;background:#2b3948}
+
+@media(max-width:600px){.field-sheet button,.relay-sheet button{padding:8px 10px}}
 .plan-source{display:block}.tool-unlock{margin:12px 0;color:#624926;font-weight:750}
 @keyframes portrait-in{from{opacity:.42;transform:translateX(-5px)}to{opacity:1;transform:none}}
 @keyframes equipment-ready{50%{background:#f8edc5}}
@@ -63,11 +74,12 @@
 .sheet.speaker-sheet{width:min(680px,100%);background:linear-gradient(155deg,#293348,#17212f);border:1px solid #a69469;box-shadow:0 0 0 2px #121821,0 12px 40px #0009}
 .speaker-turn{display:grid;grid-template-columns:clamp(76px,17vw,135px) minmax(0,1fr);gap:clamp(12px,2vw,22px);align-items:start;margin:0 0 14px}
 .speaker-portrait{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:contain;background:#202735;border:1px solid #af9b73;border-radius:5px;animation:portrait-in .17s ease-out}
+.speaker-turn.no-portrait{grid-template-columns:minmax(0,1fr)}
 .speaker-turn h2{color:#f1ce88}.speaker-text{display:grid;margin:5px 0;line-height:1.5}.speaker-text span{grid-area:1/1}.speech-reserve{visibility:hidden}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .speaker-sheet button{background:#263649;border-color:#758397}.speaker-sheet button.asked{background:#28323f;color:#bcc3c8}
 .speaker-sheet .gold{background:#edc779;color:#251d12;border-color:#edc779}
-.speaker-sheet .key-choice{outline-color:#ffe29b}.speaker-sheet .gold:hover,.speaker-sheet .gold:focus-visible{background:#ffe5aa}
+.speaker-sheet .key-choice{outline-color:#ffe29b}.speech-hint{display:block;color:#d4bc87;font-size:.88rem;margin-top:7px}.speech-hint[hidden]{display:none}.speaker-sheet .gold:hover,.speaker-sheet .gold:focus-visible{background:#ffe5aa}
 .speaker-sheet .dialog-choices button:hover:not(:focus-visible):not(.key-choice){background:#263649}
 .speaker-sheet .dialog-choices button.asked:hover:not(:focus-visible):not(.key-choice){background:#28323f}
 .avatar .speaker-portrait{float:left;width:clamp(44px,7vw,74px);margin:0 9px 2px 0}
@@ -75,10 +87,10 @@
 @media(prefers-reduced-motion:reduce){.speaker-portrait,.tool-unlock{animation:none}}
 </style>
 <link rel="stylesheet" href="pwa-layout.css">
-</head><body><main><header><div><small>PHYSICS QUEST</small><h1>Mechanics Castle</h1></div><div class="app-tools"><p id="offline-status" role="status" hidden></p><button id="screen-mode" type="button" hidden>Fullscreen</button></div></header>
-<section class="stage" aria-label="Mechanics Castle game"><div class="frame"><canvas width="720" height="360" aria-label="Top-down view of the current room"></canvas><div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Game dialogue"></div></div><div class="touch" role="group" aria-label="Touchscreen game controls"><div class="pad" role="group" aria-label="Directional pad"><button data-key="ArrowLeft" aria-label="Left">←</button><button data-key="ArrowUp" aria-label="Up">↑</button><button data-key="ArrowDown" aria-label="Down">↓</button><button data-key="ArrowRight" aria-label="Right">→</button></div><div class="choices controller-actions"><button id="interact"><kbd>E</kbd> Select</button><button id="card" hidden><kbd>C</kbd> Back / Card</button><button id="notes" hidden><kbd>N</kbd> Research</button><button id="menu" hidden><kbd>P</kbd> Menu</button></div></div></div>
+</head><body><main><header><div><small>PHYSICS QUEST</small><h1>Mechanics Castle</h1></div><div class="app-tools"><p id="offline-status" role="status" hidden></p><a href="update.html" id="game-update" hidden>Update game</a><button id="touch-mode" type="button">Touch: on</button><button id="screen-mode" type="button" hidden>Fullscreen</button></div></header>
+<section class="stage" aria-label="Mechanics Castle game"><div class="frame"><canvas width="720" height="360" aria-label="Top-down view of the current room"></canvas><div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Game dialogue"></div></div><div class="touch" role="group" aria-label="Touchscreen game controls"><div class="pad" role="group" aria-label="Directional pad"><button data-key="ArrowLeft" aria-label="Left">←</button><button data-key="ArrowUp" aria-label="Up">↑</button><button data-key="ArrowDown" aria-label="Down">↓</button><button data-key="ArrowRight" aria-label="Right">→</button></div><div class="choices controller-actions"><button id="interact" data-touch-label="Select"><kbd>E</kbd> Select</button><button id="card" data-touch-label="Back" hidden><kbd>C</kbd> Back / Card</button><button id="notes" data-touch-label="Notes" hidden><kbd>N</kbd> Research</button><button id="menu" data-touch-label="Menu" hidden><kbd>P</kbd> Menu</button></div></div></div>
 <div class="status" id="status" hidden>
-  <div class="status-copy"><div class="topline"><h2 id="room"></h2><span class="tag" id="floor"></span></div><div class="meter" id="completion" role="progressbar" aria-label="Mechanics Castle completion" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="progress"></span></div><div class="status-message" id="status-message" tabindex="0"><p class="operator-prompt" id="operator-prompt" aria-live="polite" hidden></p><p id="feedback" aria-live="polite"></p></div><button class="status-expand" id="status-expand" type="button" aria-controls="status-message" aria-expanded="false">More</button></div>
+  <div class="status-copy"><div class="topline"><h2 id="room"></h2><span class="tag" id="floor"></span></div><div class="meter" id="completion" role="progressbar" aria-label="Mechanics Castle completion" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="progress"></span></div><p class="active-action" id="active-action"></p><div class="status-message" id="status-message" tabindex="0"><p class="operator-prompt" id="operator-prompt" aria-live="polite" hidden></p><p id="feedback" aria-live="polite"></p></div><button class="status-expand" id="status-expand" type="button" aria-controls="status-message" aria-expanded="false">More</button></div>
 </div></section>
 </main>
 <script src="audio/music-manager.js"></script>
@@ -87,6 +99,10 @@
 <script src="science-labs.js"></script>
 <script src="valley-investigations.js"></script>
 <script src="portraits.js"></script>
+<script src="study-labs.js"></script>
+<script src="field-events.js"></script>
+<script src="observatory.js"></script>
+<script src="quest-extras.js"></script>
 <script>
 'use strict';
 const rooms = [
@@ -108,18 +124,19 @@ let passed=false, busy=false, previous=0, time=0, animation=null, finished=false
 const room=()=>rooms[roomIndex];
 let choosing=false, choiceIndex=0, onTitle=true, sessionId=0;
 let roomTransition=null, roomEntry=null;
-let speech=null, repairFlash=null;
+let speech=null, repairFlash=null, observatoryRepair=null;
 const motionPreference=window.matchMedia?.('(prefers-reduced-motion: reduce)');
 const reducedMotion=()=>Boolean(motionPreference?.matches);
 const gameMode=()=>adventure.state({onTitle,modal:!$('modal').hidden,choosing,busy,avatar,transitioning:Boolean(roomTransition)});
 function canMove(){return gameMode()==='exploration';}
 function canSelect(){return ['overlay','apparatus'].includes(gameMode());}
 function selectDirection(direction){
+ if(observatory.moveStudyProbe(direction))return;
  const lab=currentLab();
  if(lab?.adjust&&choosing&&$('modal').hidden){
   scienceLabs.adjust(lab,['ArrowLeft','ArrowDown'].includes(direction)?-1:1);
   say(dialInstructions(lab));
-  renderActions();return;
+  saveProgress();renderActions();return;
  }
  if(canSelect())setChoice(choiceIndex+(['ArrowLeft','ArrowUp'].includes(direction)?-1:1));
 }
@@ -134,13 +151,21 @@ function menuButtons(){
  if(!$('modal').hidden)return [...$('sheet').querySelectorAll('button, summary')].filter(item=>!item.disabled);
  return [];
 }
-function setChoice(index){
- const choices=menuButtons();
- if(!choices.length)return;
+function markChoice(index,choices){
  choiceIndex=(index+choices.length)%choices.length;
  choices.forEach((choice,i)=>choice.classList.toggle('key-choice',i===choiceIndex));
+}
+$('sheet').addEventListener('focusin',event=>{
+ const choices=menuButtons();
+ const index=choices.indexOf(event.target);
+ if(index>=0)markChoice(index,choices);
+});
+function setChoice(index,{scroll=true}={}){
+ const choices=menuButtons();
+ if(!choices.length)return;
+ markChoice(index,choices);
  choices[choiceIndex].focus({preventScroll:true});
- if(!speech||speech.complete||choiceIndex!==0)bringIntoView(choices[choiceIndex]);
+ if(scroll&&(!speech||speech.complete||choiceIndex!==0))bringIntoView(choices[choiceIndex]);
 }
 function confirmChoice(){
  if(speech&&!speech.complete){revealSpeech();return;}
@@ -150,6 +175,9 @@ function confirmChoice(){
  interact();
 }
 function cancelChoice(){
+ if(canMove()&&observatory.returnPart(roomIndex,observatoryState)){
+  saveProgress();say('Part returned to the rack.');renderActions();return;
+ }
  if(!$('modal').hidden){
   const dismiss=$('sheet').querySelector('#dismiss, #comic-skip');
   dismiss?.click();
@@ -160,7 +188,7 @@ function cancelChoice(){
  if(choosing){choosing=false;renderActions();return;}
  discovery();
 }
-const close=()=>{speech=null;$('sheet').classList.remove('vista','research-sheet','robot-story','speaker-sheet','field-sheet');$('modal').hidden=true;keys.clear();syncUtilityButtons();$('interact').focus({preventScroll:true});};
+const close=()=>{speech=null;$('sheet').classList.remove('vista','research-sheet','robot-story','speaker-sheet','field-sheet','relay-sheet','curiosity-sheet','study-sheet');$('modal').hidden=true;keys.clear();syncUtilityButtons();$('interact').focus({preventScroll:true});};
 function showRoomMessages(expanded){
  const button=$('status-expand');
  $('status-message').classList.toggle('expanded',expanded);
@@ -170,7 +198,7 @@ function showRoomMessages(expanded){
 function dialog(html,{focus=true}={}){
  showRoomMessages(false);
  speech=null;
- $('sheet').classList.remove('research-sheet','robot-story','speaker-sheet','field-sheet');
+ $('sheet').classList.remove('research-sheet','robot-story','speaker-sheet','field-sheet','relay-sheet','curiosity-sheet','study-sheet');
  keys.clear();padKeys.clear();choiceIndex=0;$('sheet').innerHTML=html;$('modal').hidden=false;syncUtilityButtons();
  $('sheet').scrollTop=0;
  for(const direction of priorPadDirections)blockedPadDirections.add(direction);
@@ -181,15 +209,23 @@ function portraitMarkup(name,mood){
  return portrait?'<img class="speaker-portrait" src="'+portrait+'" alt="" width="240" height="240">':'';
 }
 function showSpeech(name,message,mood,actions,{focus=true}={}){
- dialog('<div class="speaker-turn">'+portraitMarkup(name,mood)+'<div><h2>'+name+'</h2>'+
+ const portrait=portraitMarkup(name,mood);
+ dialog('<div class="speaker-turn'+(portrait?'':' no-portrait')+'">'+portrait+'<div><h2>'+name+'</h2>'+
   '<p class="speaker-text"><span class="sr-only" aria-live="polite">'+message+'</span>'+
   '<span class="speech-reserve" aria-hidden="true">'+message+'</span>'+
-  '<span id="speech-text" aria-hidden="true"></span></p></div></div>'+actions,{focus:false});
+  '<span id="speech-text" aria-hidden="true"></span></p><small class="speech-hint" id="speech-hint"></small></div></div>'+actions,{focus:false});
  $('sheet').classList.add('speaker-sheet');
  speech={text:message,start:performance.now(),count:0,complete:false};
  if(reducedMotion())revealSpeech();
  else{advanceSpeech(speech.start);syncUtilityButtons();}
  if(focus)setChoice(0);
+}
+function updateSpeechHint(){
+ if(!speech)return;
+ const hint=$('speech-hint');
+ hint.hidden=speech.complete;
+ const message=usingPadLabels?'A to reveal the full line':'E to reveal the full line';
+ if(hint.textContent!==message)hint.textContent=message;
 }
 function revealSpeech(){
  $('speech-text').textContent=speech.text;
@@ -198,6 +234,7 @@ function revealSpeech(){
 }
 function advanceSpeech(now){
  if(!speech||speech.complete)return;
+ if(reducedMotion()){revealSpeech();return;}
  const count=Math.min(speech.text.length,4+Math.max(0,Math.floor((now-speech.start)/13)));
  if(count===speech.text.length){revealSpeech();return;}
  if(count!==speech.count){
@@ -232,7 +269,7 @@ function say(text=$('feedback').textContent){
 function intro(){
  music.setTheme(null);
  setTitleScreen(true);
- dialog('<span class="tag">PHYSICS QUEST · MECHANICS CASTLE</span><h2>Choose your character</h2><div class="choices title-choices" id="avatars"></div><div id="resume"></div>');
+ dialog('<span class="tag">'+(observatoryTest?'PHYSICS QUEST · OBSERVATORY TEST':'PHYSICS QUEST · MECHANICS CASTLE')+'</span><h2>Choose your character</h2><div class="choices title-choices" id="avatars"></div><div id="resume"></div>');
  for(const name of Object.keys(avatars)){
   const choice=button($('avatars'),name,()=>chooseStart(name),'avatar');
   choice.innerHTML=portraitMarkup(name)+'<strong>'+name+'</strong><i>'+avatars[name].line+'</i>';
@@ -254,12 +291,28 @@ function notebook(){
 }
 function showNotebook(section='objectives',selectedCard){
  const tabs=[['objectives','Objectives'],['discoveries','Discoveries'],['equipment','Equipment']];
+ if(arrived)tabs.push(['observations','Observatory readings']);
+ if(observatoryState.archived)tabs.push(['archive','Field report']);
  const checkLine=(done,name,stage='Pending')=>'<li class="'+(done?'done':'')+'">'+name+' · '+(done?'Complete':stage)+'</li>';
  let page='';
  if(section==='objectives'){
   const checks=planOwners.filter(id=>id<6).map(id=>checkLine(reported.has(id),operators[id][4],solved.has(id)?'Report to '+operators[id][0]:'Pending')).join('');
   const route=surveyRead?'Survey recorded. Take the ridge road east to the dome. The service gate opens from Sandstone Pass.':'The survey marker is across the East Garden drawbridge.';
-  page='<h3>Current objective</h3><p>'+objective()+'</p><h3>Mechanics Castle</h3><p>'+confirmedCount()+'/6 safety checks confirmed</p><ul class="journal-checks">'+checks+checkLine(finished,'Flywheel Guardian restart',reported.has(6)?'Read the diagnostics':solved.has(6)?'Report to '+operators[6][0]:'Pending')+'</ul><h3>Valley route</h3><ul class="journal-checks">'+checkLine(surveyRead,'East Garden survey','Optional')+checkLine(arrived,'E&amp;M Observatory entrance',finished?'Follow the ridge road east':'Unlock by restoring the Guardian')+'</ul><p>'+route+'</p>';
+  const summary='<h3>Current objective</h3><p>'+objective()+'</p>';
+  const castle='<h3>Mechanics Castle</h3><p>'+confirmedCount()+'/6 safety checks confirmed</p><ul class="journal-checks">'+checks+checkLine(finished,'Flywheel Guardian restart',reported.has(6)?'Read the diagnostics':solved.has(6)?'Report to '+operators[6][0]:'Pending')+'</ul><h3>Valley route</h3><ul class="journal-checks">'+checkLine(surveyRead,'East Garden survey','Optional')+checkLine(arrived,'E&amp;M Observatory entrance',finished?'Follow the ridge road east':'Unlock by restoring the Guardian')+'</ul><p>'+route+'</p>';
+  const inObservatory=observatory.inside(roomIndex);
+  page=summary+(inObservatory?'':castle);
+  if(arrived){
+   page+='<h3>Desert Observatory</h3><ul class="journal-checks">'+observatory.floors.map(floor=>
+    checkLine(observatory.confirmed(observatoryState,floor.index),floor.system,observatory.awaitingReport(observatoryState,floor.index)?'Explain to '+observatory.leadName(floor):observatoryState.notes.includes(floor.index)?'Notes read':'Floor '+(floor.index+1))).join('')+'</ul>';
+   if(observatory.ready(observatoryState))page+='<ul class="journal-checks">'+checkLine(observatoryState.aligned,'Acquire the beacon','Scan and tune at the lobby telescope')+'</ul>';
+   if(observatoryState.aligned)page+='<ul class="journal-checks">'+checkLine(observatoryState.contact,'Contact with Nacre','Answer the Signal Chamber console')+checkLine(observatoryState.arrived,'Nacre Landing','Enter the stargate')+checkLine(observatoryState.archived,'Expedition field report','Give your results to Vela')+'</ul>';
+   for(const floor of observatory.floors){
+    const report=observatoryState.reports[floor.index];
+    if(report)page+='<p><strong>'+floor.topic+'</strong><br>'+(report.reading?observatory.escape(report.reading)+' ':'')+floor.evidence+'</p>';
+   }
+  }
+  if(inObservatory)page+=castle;
   if(finished){
    page+='<h3>Optional field investigations</h3><ul class="journal-checks">';
    for(const [id,station] of Object.entries(valleyInvestigations.stations)){
@@ -269,8 +322,12 @@ function showNotebook(section='objectives',selectedCard){
    }
    page+='</ul>';
   }
+ }else if(section==='observations'){
+  page=observatory.observationsHTML(observatoryState,observatory.floorFor(roomIndex)?.index);
+ }else if(section==='archive'){
+  page=nacreReport();
  }else if(section==='discoveries'){
-  page='<h3>Discovery cards · '+recovered.size+'/'+planOwners.length+'</h3><div class="journal-list" id="journal-cards"></div>'+
+  page=(curiosities.size?'<h3>Curiosities</h3>'+questExtras.list(curiosities):'')+'<h3>Discovery cards · '+recovered.size+'/'+planOwners.length+'</h3><div class="journal-list" id="journal-cards"></div>'+
    (recovered.size?'':'<p>Inspect a drafting table, book, or computer in a research room to collect a card.</p>');
  }else{
   page='<h3>Available equipment</h3>';
@@ -279,8 +336,10 @@ function showNotebook(section='objectives',selectedCard){
    const roomsRead=planOwners.filter(id=>scienceLabs.instrumentByRoom[id]===name&&recordedReadings.has(id)).map(id=>rooms[id].name);
    page+='<p><strong>'+name+'</strong><br>'+description+(roomsRead.length?'<br><small>Readings taken at '+roomsRead.join(', ')+'.</small>':'')+'</p>';
   }
-  if(!acquired.size)page+='<p>New instruments come with the plans that teach you how to use them.</p>';
-  else page+='<p class="muted">Use Research near an apparatus to take a reading.</p>';
+  const fieldMeter=observatory.confirmed(observatoryState,0);
+  if(fieldMeter)page+='<p><strong>Observatory field meter</strong><br>Mira’s portable meter reads the circuit, logs timed induction passes, and docks with the magnetic compass.</p>';
+  if(!acquired.size&&!fieldMeter)page+='<p>New instruments come with the plans that teach you how to use them.</p>';
+  else page+='<p class="muted">The secondary action shows Read instrument where a reading is available. Elsewhere it opens the Field Notebook.</p>';
  }
  const nav=tabs.map(([id,name])=>'<button id="journal-'+id+'"'+(id===section?' aria-current="true"':'')+'>'+name+'</button>').join('');
  dialog('<h2>Field notebook</h2><div class="choices journal-tabs">'+nav+'<button id="map">Map</button></div>'+page+'<hr><button class="gold" id="dismiss">Back to the room</button>',{focus:false});
@@ -302,18 +361,29 @@ function ending(){
 }
 
 $('interact').onclick=confirmChoice;$('notes').onclick=useResearchTool;$('card').onclick=()=>usingPadLabels?goBack():cancelChoice();
-function useResearchTool(){
- if(!canMove())return;
- const target=activeInteraction();
- if(target?.kind==='plan'){openPlan(room().planOwner,true,nearbySource());return;}
+function researchAction(target){
+ if(target?.kind==='plan')return {label:'Read plan',run:()=>openPlan(room().planOwner,true,nearbySource())};
+ if(observatory.inside(roomIndex)){
+  const instrument=target?.kind==='observatory-station'&&observatory.instrument(roomIndex,target.control.id,observatoryState);
+  if(instrument){
+   const run=instrument.measure?()=>observatoryStation(target.control.id):
+    ()=>observatory.panel(instrument.title,instrument.text,[['Open notebook',()=>showNotebook('observations')]]);
+   return {label:'Read instrument',run};
+  }
+  const section=roomIndex===observatory.offworld&&observatoryState.archived?'archive':
+   observatoryState.observations.some(rows=>rows.length)?'observations':'objectives';
+  return {label:'Field Notebook',run:()=>showNotebook(section)};
+ }
  const lab=currentLab();
  const control=target?.kind==='lab'?target.control:
   lab&&labDone()?scienceLabs.targets(lab).find(item=>item.id!=='reset'&&nearby(item.point,34)):null;
- if(control&&recovered.has(roomIndex)&&acquired.has(scienceLabs.instrumentByRoom[roomIndex])){
-  takeReading(lab,control);
-  return;
+ if(control&&control.id!=='reset'&&recovered.has(roomIndex)&&acquired.has(scienceLabs.instrumentByRoom[roomIndex])){
+  return {label:'Read instrument',run:()=>takeReading(lab,control)};
  }
- notebook();
+ return {label:'Field Notebook',run:notebook};
+}
+function useResearchTool(){
+ if(canMove())researchAction(activeInteraction()).run();
 }
 function takeReading(lab,control){
  const instrument=scienceLabs.instrumentByRoom[lab.room];
@@ -327,7 +397,7 @@ function takeReading(lab,control){
  $('reading-journal').onclick=()=>showNotebook('equipment');
 }
 function goBack(){
- if(canSelect()||currentLab()?.carry)cancelChoice();
+ if(canSelect()||currentLab()?.carry||(canMove()&&observatory.trialState(roomIndex,observatoryState).carry!==null))cancelChoice();
 }
 const inputActions={e:confirmChoice,c:cancelChoice,escape:()=>{
  if($('status-expand').getAttribute('aria-expanded')==='true')showRoomMessages(false);
@@ -337,6 +407,7 @@ const bindings={w:'ArrowUp',a:'ArrowLeft',s:'ArrowDown',d:'ArrowRight'};
 window.addEventListener('keydown',e=>{
  const key=e.key.toLowerCase();
  const direction=bindings[key]||e.key;
+ if(direction.startsWith('Arrow')||inputActions[key]||['Enter',' '].includes(e.key))setInputMode('keyboard');
  if(direction.startsWith('Arrow')){
   e.preventDefault();
   if(canSelect()){
@@ -346,13 +417,16 @@ window.addEventListener('keydown',e=>{
  }
  const action=inputActions[key];
  if(action){e.preventDefault();if(!e.repeat)action();}
- if(e.repeat&&['Enter',' '].includes(e.key))e.preventDefault();
+ if(['Enter',' '].includes(e.key)&&(e.repeat||speech&&!speech.complete)){
+  e.preventDefault();
+  if(!e.repeat)revealSpeech();
+ }
 });
 $('status-expand').onclick=()=>showRoomMessages($('status-expand').getAttribute('aria-expanded')!=='true');
 window.addEventListener('keyup',e=>keys.delete(bindings[e.key.toLowerCase()]||e.key));
 window.addEventListener('blur',()=>keys.clear());
 document.querySelectorAll('[data-key]').forEach(el=>{
- el.onpointerdown=e=>{e.preventDefault();
+ el.onpointerdown=e=>{e.preventDefault();setInputMode('touch');
   if(canSelect()){selectDirection(el.dataset.key);return;}
   if(!canMove())return;
   el.setPointerCapture(e.pointerId);keys.add(el.dataset.key);};
@@ -370,7 +444,59 @@ function label(text,x,y,color='#f4ead0',size=14){
 function line(x,y,x2,y2,color,width=3){
  ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x2,y2);ctx.stroke();
 }
+const observatorySpriteDesigns={
+ Vega:{skin:'#b9754d',trim:'#d6ac68',item:'lens'},
+ Tamsin:{skin:'#e2b68f',trim:'#d6a66b',item:'apron'},
+ Suri:{skin:'#bf835d',trim:'#e0ab76',item:'coil'},
+ Sana:{skin:'#946147',trim:'#c6b79b',item:'compass'},
+ Vela:{skin:'#d0b0c4',trim:'#e9ce99',item:'star'}
+};
+function observatorySprite(x,y,look,{skin,trim,item},facing){
+ const dark='#222532';
+ const side=facing==='east'?1:facing==='west'?-1:0;
+ const back=facing==='north';
+ rect(x-14,y+8,28,6,'#13223198');
+ rect(x-10,y-4,20,14,dark);rect(x-8,y-5,16,13,look.coat);
+ rect(x-7,y+9,5,5,dark);rect(x+2,y+9,5,5,dark);
+ rect(x-9,y-18,18,14,dark);rect(x-7,y-20,14,12,look.hair);
+ if(back){rect(x-8,y-17,16,13,look.hair);}
+ else{
+  rect(x-6+side*2,y-14,12,10,skin);
+  rect(x-7,y-16,14,3,look.hair);
+  rect(x+2+side*2,y-10,2,2,dark);
+  if(!side)rect(x-4,y-10,2,2,dark);
+ }
+ rect(x-8,y-4,16,2,trim);rect(x-3,y+1,6,2,trim);
+ if(item==='lens'){
+  rect(x-9,y-17,18,3,'#98704c');
+  const lens=x+(side||1)*5;
+  rect(lens-3,y-21,7,7,'#72573e');rect(lens-2,y-20,5,5,trim);
+  rect(lens,y-19,2,2,back?'#a78962':'#c3dee0');
+  if(!back)rect(x-side*3-7,y-9,2,4,trim);
+  rect(x-6,y+1,2,6,'#ae865f');rect(x+4,y+1,2,6,'#ae865f');
+ }
+ if(item==='apron'){rect(x-5,y+1,10,7,'#936743');rect(x-5,y-13,3,1,trim);rect(x+2,y-13,3,1,trim);}
+ if(item==='coil'){for(const offset of [-4,0,4])rect(x+offset,y+1,2,5,trim);}
+ if(item==='compass'){rect(x-3,y-23,6,4,look.hair);rect(x-2,y+1,4,4,trim);}
+ if(item==='star'){
+  const hair='#34394f',pale='#665e78';
+  rect(x-9,y-18,17,3,hair);
+  rect(x-10,y-15,3,17,hair);rect(x-10,y-16,2,6,pale);
+  if(back||side<0)rect(x+6,y-15,5,17,hair);
+  if(back){
+   rect(x-7,y-16,14,13,hair);rect(x-5,y-12,2,13,pale);
+   rect(x-6,y-17,12,2,'#d7c6a5');
+  }else{
+   rect(x-8+side*2,y-16,6,3,'#d7c6a5');
+   rect(x+(side||1)*8-2,y-12,5,2,skin);
+   rect(x+(side||1)*8-1,y-9,2,3,trim);
+  }
+  rect(x-1,y-1,2,7,trim);rect(x-3,y+2,6,2,trim);
+ }
+}
 function sprite(x,y,look,walking=false,facing='east'){
+ const design=observatorySpriteDesigns[look.name?.split(' ').at(-1)];
+ if(design){observatorySprite(x,y,look,design,facing);return;}
  const img=personImages[look.coat];
  if(img?.complete&&img.naturalWidth){
   const step=walking?Math.floor(time*7)%2+1:0;
@@ -530,6 +656,7 @@ function furnitureCollision(x,y){
 }
 
 function blocks(x,y){
+ if(observatory.inside(roomIndex))return observatory.blocks(roomIndex,x,y,observatoryState);
  if(furnitureCollision(x,y))return true;
  if(treeCollision(roomIndex,x,y))return true;
  const station=valleyInvestigations.stations[roomIndex];
@@ -547,23 +674,41 @@ const controllerDirections=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
 const padKeys=new Set(), blockedPadDirections=new Set();
 const padButtons=[[0,confirmChoice],[1,goBack],[2,useResearchTool],[3,repairFrontMenu]];
 let priorPadButtons=new Set(), priorPadDirections=new Set(), nextPadRepeat=0, usingPadLabels=false;
+let lastInput='keyboard', stickX=0, stickY=0;
+function setInputMode(input){
+ if(lastInput===input)return;
+ lastInput=input;
+ usingPadLabels=input==='gamepad';
+ for(const [id,key,padKey] of controllerLabels){
+  const cap=$(id).querySelector('kbd');
+  if(cap)cap.textContent=usingPadLabels?padKey:key;
+  if(id==='card')$(id).lastChild.textContent=usingPadLabels?' Back':' Back / Card';
+ }
+ syncUtilityButtons();
+}
 const controllerLabels=[['interact','E','A'],['card','C','B'],['notes','N','X'],['menu','P','Y']];
 const held=key=>keys.has(key)||padKeys.has(key);
 function updateGamepad(now){
  let pad;
  try{pad=Array.from(navigator.getGamepads?.()||[]).find(device=>device?.mapping==='standard');}catch{}
  padKeys.clear();
- if(Boolean(pad)!==usingPadLabels){
-  usingPadLabels=Boolean(pad);
-  for(const [id,key,padKey] of controllerLabels){
-   const cap=$(id).querySelector('kbd');
-   if(cap)cap.textContent=pad?padKey:key;
-   if(id==='notes')$(id).lastChild.textContent=' Research';
-   if(id==='card')$(id).lastChild.textContent=pad?' Back':' Back / Card';
+ stickX=0;stickY=0;
+ if(!pad){
+  priorPadButtons.clear();priorPadDirections.clear();blockedPadDirections.clear();
+  if(usingPadLabels)setInputMode('keyboard');
+  return;
+ }
+ if(canMove()){
+  const x=pad.axes?.[0]||0,y=pad.axes?.[1]||0;
+  const strength=Math.hypot(x,y);
+  if(strength>.22){
+   const magnitude=Math.min(1,(strength-.22)/.78);
+   stickX=magnitude*x/strength;stickY=magnitude*y/strength;
+   setInputMode('gamepad');
   }
  }
- if(!pad){priorPadButtons.clear();priorPadDirections.clear();blockedPadDirections.clear();return;}
  const directions=new Set(controllerDirections.filter((key,i)=>pad.buttons[12+i]?.pressed));
+ if(directions.size&&[...directions].some(key=>!priorPadDirections.has(key)))setInputMode('gamepad');
  for(const key of blockedPadDirections)if(!directions.has(key))blockedPadDirections.delete(key);
  if(canSelect()){
   const available=[...directions].filter(key=>!blockedPadDirections.has(key));
@@ -578,11 +723,15 @@ function updateGamepad(now){
  priorPadDirections=directions;
  const down=new Set(padButtons.filter(([i])=>pad.buttons[i]?.pressed).map(([i])=>i));
  const pressed=padButtons.find(([i])=>down.has(i)&&!priorPadButtons.has(i));
- if(pressed){music.unlock();pressed[1]();}
+ if(pressed){setInputMode('gamepad');music.unlock();pressed[1]();}
  priorPadButtons=down;
 }
 
-function movementDirection(){return adventure.movement(Number(held('ArrowRight'))-Number(held('ArrowLeft')),Number(held('ArrowDown'))-Number(held('ArrowUp')));}
+function movementDirection(){
+ const x=Number(held('ArrowRight'))-Number(held('ArrowLeft'));
+ const y=Number(held('ArrowDown'))-Number(held('ArrowUp'));
+ return x||y?adventure.movement(x,y):{x:stickX,y:stickY};
+}
 function frame(now){
  time=now/1000;
  const dt=Math.min(.04,(now-previous)/1000);
@@ -590,8 +739,10 @@ function frame(now){
  player.walking=false;
  if(canMove()){
   adventure.move(player,movementDirection(),184*dt,canStand);
+  const trial=observatory.updateTrial(roomIndex,dt,observatoryState);
+  if(trial)finishObservatoryAction(trial,trial.index);
   const target=activeInteraction();
-  const current=target?(target.kind+(target.door?.dir||target.control?.id||target.studentId||'')):'';
+  const current=target?target.kind+interactionLabel(target):'';
   if(current!==uiZone){uiZone=current;renderActions();}
  }
  draw();requestAnimationFrame(frame);
@@ -608,7 +759,8 @@ rooms.push(
  {name:'Alder Orchard',floor:'Valley road',goal:'An optional irrigation test station sits west of the shelter. The service trail continues east.'},
  {name:'Service Gulch',floor:'Desert foothills',goal:'The optional survey turntable sits north of the wagon trail. The service gate leads to Sandstone Pass.'}
 );
-const labSessions=new Map(), fieldReports=new Map();
+const labSessions=new Map(), fieldReports=new Map(), curiosities=new Set();
+let observatoryState=observatory.fresh();
 function currentLab(){
  if(!scienceLabs.title[roomIndex])return null;
  if(!labSessions.has(roomIndex))labSessions.set(roomIndex,scienceLabs.make(roomIndex,roomIndex===9?gardenBridge:solved.has(roomIndex),time));
@@ -704,6 +856,7 @@ function useLabControl(control){
   keys.clear();padKeys.clear();
   say(dialInstructions(lab));
  }
+ if(!busy)saveProgress();
  renderActions();
 }
 function labTask(lab){
@@ -744,7 +897,7 @@ function cancelLabControl(){
   say(scienceLabs.goal(lab));renderActions();return true;
  }
  if(lab?.carry){
-  lab.carry=null;say('The load is back on the rack.');renderActions();return true;
+  lab.carry=null;saveProgress();say('The load is back on the rack.');renderActions();return true;
  }
  return false;
 }
@@ -788,9 +941,12 @@ function performTrial(lab,key,win,message,seconds,{accepted=win,onSettle,onWin}=
   if(win)lab.adjust=null;
   choosing=dial&&!win;
   if(win)onWin?.();
-  say(scienceLabs.result(lab,key,win?message+' Repair complete.':message,accepted));
+  if(key==='friction')lab.lastTrial={index:lab.trial.index};
+  if(key==='momentum')lab.lastTrial={speed:lab.trial.speed};
+  lab.lastFeedback=scienceLabs.result(lab,key,win?message+' Repair complete.':message,accepted);
+  say(lab.lastFeedback);
   renderActions();
-  if(win)saveProgress();
+  saveProgress();
  },seconds*1000);
 }
 
@@ -842,6 +998,7 @@ for(const [i,owner] of planOwners.entries()){
  plan.room=16+i;
  rooms.push({name:plan.name,floor:rooms[owner].floor,planOwner:owner,goal:'Inspect the '+researchSource(owner).name.toLowerCase()+'.'});
 }
+rooms.push(...observatory.rooms);
 function findPlan(owner){
  const plan=plans[owner];
  return 'Look for the '+plan.name+' through the '+plan.dir+' door.';
@@ -922,7 +1079,7 @@ function objective(){
  if(roomIndex===5)return 'Take the north door to the guardian chamber.';
  if(roomIndex===6)return finished?'Take the north door to Castle Ridge and follow the road to the observatory.':'Read the Flywheel Guardian’s diagnostic terminal at the east end of the chamber.';
  if(roomIndex===10&&surveyRead)return 'Follow your survey route east across Stonebridge. The orchard trail branches north.';
- if(roomIndex===13&&arrived)return 'You reached the E&M Observatory. The valley remains open for exploration.';
+ if(roomIndex===13&&arrived||observatory.inside(roomIndex))return observatory.objective(roomIndex,observatoryState);
  if(roomIndex>=10&&roomIndex<16)return room().goal;
  return 'Return to the landing and follow the north passage toward the guardian.';
 }
@@ -953,13 +1110,22 @@ const confirmedCount=()=>[0,1,2,3,4,5].filter(i=>reported.has(i)).length;
 const operatorCoats={0:'#bc9361',1:'#927d5a',2:'#8199a3',3:'#94667d',4:'#63978d',5:'#b08e58',6:'#8f9d83',9:'#bf9360'};
 const operatorPoint=()=>operators[roomIndex]?{x:operators[roomIndex][1],y:operators[roomIndex][2]}:null;
 function refreshProgress(){
- const steps=confirmedCount()+Number(finished);
- $('progress').style.width=100*steps/7+'%';
+ const inside=observatory.inside(roomIndex);
+ const steps=inside?observatory.floors.filter(f=>observatory.confirmed(observatoryState,f.index)).length:confirmedCount()+Number(finished);
+ const total=inside?observatory.floors.length:7;
+ $('progress').style.width=100*steps/total+'%';
+ $('completion').setAttribute('aria-valuemax',total);
  $('completion').setAttribute('aria-valuenow',steps);
- $('completion').setAttribute('aria-valuetext',confirmedCount()+' of 6 safety checks confirmed. Guardian '+(finished?'online.':'restart pending.'));
+ $('completion').setAttribute('aria-label',inside?'Observatory repair confirmations':'Mechanics Castle completion');
+ $('completion').setAttribute('aria-valuetext',inside?steps+' of '+total+' repairs confirmed.':
+  confirmedCount()+' of 6 safety checks confirmed. Guardian '+(finished?'online.':'restart pending.'));
 }
 function needsReport(index){return !reported.has(index)&&(index===9?gardenBridge:solved.has(index));}
 function operatorPrompt(){
+ const lead=observatory.reportLead(roomIndex,observatoryState);
+ if(lead)return 'Return to '+observatory.leadName(observatory.floorFor(roomIndex))+' to explain your repair.';
+ const step=observatory.labStep(roomIndex,observatoryState);
+ if(step)return step.text;
  const operator=operators[roomIndex];
  if(!operator)return '';
  if(needsReport(roomIndex))return 'Talk to '+operator[0]+' to explain your repair and reopen the gate.';
@@ -1032,8 +1198,9 @@ function showPauseMenu(){
  $('title').onclick=intro;
  $('dismiss').onclick=close;
 }
-const checkpointKey='physics-quest-checkpoints-v1';
-const progressKey='physics-quest-progress-v2';
+const observatoryTest=new URLSearchParams(window.location?.search||'').get('test')==='observatory';
+const checkpointKey=observatoryTest?'physics-quest-observatory-test-checkpoints-v1':'physics-quest-checkpoints-v1';
+const progressKey=observatoryTest?'physics-quest-observatory-test-v1':'physics-quest-progress-v2';
 function loadProgress(){
  try{
   const current=JSON.parse(localStorage.getItem(progressKey)||'null');
@@ -1064,7 +1231,9 @@ function saveProgress(){
   solved:[...solved],reported:[...reported],consulted:[...consulted],recovered:[...recovered],
   visited:[...visited],tools:[...acquired],readings:[...recordedReadings],fieldReports:[...fieldReports],
   discussed:[...discussed].map(([name,topics])=>[name,[...topics]]),
-  gardenBridge,surveyRead,shortcutOpen,finished,vistaSeen,arrived
+  gardenBridge,surveyRead,shortcutOpen,finished,vistaSeen,arrived,observatory:observatoryState,
+  labs:[...labSessions].filter(([id])=>id===9?!gardenBridge:!solved.has(id)).map(([id,lab])=>[id,scienceLabs.snapshot(lab)]),
+  curiosities:[...curiosities]
  };
  writeProgress();
 }
@@ -1125,23 +1294,46 @@ function resumeRun(){
  gardenBridge=run.gardenBridge===true;surveyRead=run.surveyRead===true;
  shortcutOpen=run.shortcutOpen===true;finished=run.finished===true;
  vistaSeen=run.vistaSeen===true;arrived=run.arrived===true;
+ observatoryState=observatory.restore(run.observatory);
+ restore(curiosities,run.curiosities,questExtras.known);
+ if(Array.isArray(run.labs))for(const entry of run.labs){
+  if(!Array.isArray(entry))continue;
+  const [id,lab]=entry;
+  if(isChallenge(id)&&lab&&typeof lab==='object'&&(id===9?!gardenBridge:!solved.has(id)))labSessions.set(id,scienceLabs.restore(id,lab,time));
+ }
  if(solved.has(0))Object.assign(mira,{x:235,y:252,walking:false});
  avatar=run.avatar;
  setTitleScreen(false);
  close();
- const entry=links[run.room].some(door=>door.dir===run.entry)?run.entry:null;
- enter(run.room,entry);
+ const floor=observatory.floorFor(run.room);
+ const linksHere=links[run.room];
+ const entry=linksHere.some(door=>door.dir===run.entry)?run.entry:
+  floor&&(run.room===floor.side||['east','west'].includes(run.entry))?
+   linksHere.find(door=>door.to===(run.room===floor.side?floor.room:floor.side))?.dir:null;
+ enter(run.room,entry,run.room===observatory.lobby&&observatoryState.intro?observatory.telescopeSpawn:undefined,true);
+}
+function syncResearchLabel(target=canMove()?activeInteraction():null){
+ const label=canMove()?researchAction(target).label:'Field Notebook';
+ const notes=$('notes');
+ notes.lastChild.textContent=' '+label;
+ notes.setAttribute('aria-label',label);
+ notes.setAttribute('data-touch-label',label==='Read instrument'?'Read':label==='Read plan'?'Plan':'Notes');
 }
 function syncUtilityButtons(){
+ updateSpeechHint();
  const unavailable=onTitle||!avatar||!$('modal').hidden||busy||Boolean(roomTransition);
  $('notes').hidden=unavailable;
  $('menu').hidden=unavailable;
  const verb=speech&&!speech.complete?'Reveal':!$('modal').hidden||onTitle?'Select':busy?'Wait':choosing?'Test':'Interact';
  const target=canMove()?activeInteraction():null;
  const label=target?interactionLabel(target):verb;
+ syncResearchLabel(target);
  const interactButton=$('interact');
- interactButton.lastChild.textContent=' '+label.split(' ')[0];
+ interactButton.lastChild.textContent=' '+(target?'Interact':verb);
+ const actionKey=lastInput==='touch'?'Use':usingPadLabels?'A':'E';
+ $('active-action').textContent=target?actionKey+' · '+label:'';
  interactButton.setAttribute('aria-label',label);
+ interactButton.setAttribute('data-touch-label',target?'Use':verb);
  interactButton.title=label;
 }
 function setTitleScreen(active){
@@ -1152,8 +1344,8 @@ function setTitleScreen(active){
 }
 function startCheckpoint(name,area){
  clearSession();
- surveyRead=checkpoint.survey;
- shortcutOpen=checkpoint.shortcut;
+ surveyRead=Boolean(checkpoint?.survey);
+ shortcutOpen=Boolean(checkpoint?.shortcut);
  if(surveyRead){gardenBridge=true;reported.add(9);consulted.add(9);recovered.add(9);}
  avatar=name;
  setTitleScreen(false);
@@ -1165,22 +1357,27 @@ function startCheckpoint(name,area){
  Object.assign(mira,{x:235,y:252,walking:false});
  finished=true;
  vistaSeen=true;
- arrived=area===13;
+ arrived=area===13||area===observatory.lobby;
  close();
- enter(area,area===10?'south':'west');
- say(area===10?'Guardian online. Choose a route to the E&M Observatory.':'E&M Observatory reached. Explore outside or follow the trail back west.');
+ if(area===observatory.lobby){
+  checkpoint={area:13,survey:surveyRead,shortcut:shortcutOpen};
+  enter(area,null,observatory.entry);
+ }else{
+  enter(area,area===10?'south':'west');
+  say(area===10?'Guardian online. Choose a route to the E&M Observatory.':observatory.objective(13,observatoryState));
+ }
 }
 const initialPeople=new Map();
-const operatorFacing=new Map();
+const operatorFacing=new Map(), observatoryFacing=new Map();
 function clearSession(){
  sessionId++;attemptId++;
- roomTransition=null;roomEntry=null;repairFlash=null;
- labSessions.clear();fieldReports.clear();
+ roomTransition=null;roomEntry=null;repairFlash=null;observatoryRepair=null;
+ labSessions.clear();fieldReports.clear();curiosities.clear();
  for(const list of [recovered,consulted,reported,solved,visited,acquired,recordedReadings,attempts,discussed])list.clear();
- operatorFacing.clear();
+ operatorFacing.clear();observatoryFacing.clear();
  shortcutOpen=false;
  gardenBridge=false;bridgeStart=null;surveyRead=false;
- finished=false;vistaSeen=false;arrived=false;
+ finished=false;vistaSeen=false;arrived=false;observatory.cancelTrials();observatoryState=observatory.fresh();
  avatar='';
  Object.assign(mira,{x:273,y:105,walking:false});
  for(const [id,person] of Object.entries(people)){
@@ -1190,11 +1387,12 @@ function clearSession(){
  animation=null;
 }
 function chooseStart(name){
+ if(observatoryTest){confirmStart(name,observatory.lobby,intro);return;}
  if(!checkpoint){confirmStart(name,0,intro);return;}
  function startingAreas(){
   dialog('<h2>Choose a starting area</h2><p>Playing as '+name+'</p><div class="dialog-choices" id="title-choices"></div><hr><button id="dismiss">Change character</button>');
   const areas=[[0,'Mechanics Castle'],[10,'Castle Ridge']];
-  if(checkpoint.area===13)areas.push([13,'E&M Observatory entrance']);
+  if(checkpoint.area===13)areas.push([observatory.lobby,'E&M Observatory lobby']);
   for(const [area,label] of areas)button($('title-choices'),label,()=>confirmStart(name,area,startingAreas));
   $('dismiss').onclick=intro;
   setChoice(0);
@@ -1242,7 +1440,7 @@ const passages=[
  [10,'east',11,[]],[11,'east',12,[]],[12,'east',13,[]],
  [10,'north',14,[]],[14,'east',15,[]],[15,'north',12,[-2]]
 ];
-passages.push(...planOwners.map(owner=>[owner,plans[owner].dir,plans[owner].room,[]]));
+passages.push(...planOwners.map(owner=>[owner,plans[owner].dir,plans[owner].room,[]]),...observatory.passages);
 const links=rooms.map(()=>[]);
 for(const [a,dir,b,required] of passages){
  links[a].push({dir,to:b,required});
@@ -1252,7 +1450,7 @@ const solved=new Set(), visited=new Set(), attempts=new Map();
 let shortcutOpen=false;
 const prerequisitesMet=door=>door.required.every(index=>index===-1?finished:index===-2?shortcutOpen:reported.has(index));
 const challengeLatch=(door,from=roomIndex)=>Boolean(scienceLabs.title[from]&&door.to!==plans[from].room&&!reported.has(from));
-const isOpen=(door,from=roomIndex)=>!challengeLatch(door,from)&&prerequisitesMet(door);
+const isOpen=(door,from=roomIndex)=>!challengeLatch(door,from)&&prerequisitesMet(door)&&!observatory.locked(from,door.to,observatoryState);
 const nearby=(point,radius)=>Math.hypot(player.x-point.x,player.y-point.y)<radius;
 $('menu').onclick=repairFrontMenu;
 const nearDoor=()=>links[roomIndex].find(door=>nearby(threshold[door.dir],33));
@@ -1343,7 +1541,7 @@ function walkMira(){
  requestAnimationFrame(walk);
 }
 const diagnostic={x:637,y:110};
-const observatoryDoor={x:542,y:175};
+
 let vistaSeen=false,arrived=false;
 const originalClose=close;
 const finishStory=ending;
@@ -1352,6 +1550,7 @@ const originalFrame=frame;
 const originalLoad=loadRoom;
 
 function npcFeet(){
+ if(observatory.inside(roomIndex))return observatory.people(roomIndex,observatoryState).concat(observatory.backgroundPeople(roomIndex));
  const point=roomIndex===9?null:roomIndex===0&&solved.has(0)?mira:talkPoint();
  return [operatorPoint(),point].filter(Boolean).concat(students[roomIndex]||[]);
 }
@@ -1367,14 +1566,23 @@ function activeInteraction(){
   if(point)candidates.push({kind,point,radius,priority,...extra});
  };
  if(roomIndex===6&&reported.has(6)&&!finished)add('exit',diagnostic,38,4);
- if(roomIndex===13)add('arrival',observatoryDoor,34,4);
+ if(roomIndex===13)add('arrival',observatory.entrance,34,4);
+ if(observatory.inside(roomIndex)){
+  for(const control of observatory.controls(roomIndex,observatoryState))add('observatory-station',control,31,4,{control});
+  for(const person of observatory.people(roomIndex,observatoryState))add('observatory-guide',person,32,5);
+  if(roomIndex===observatory.lobby)add('observatory-exit',observatory.exit,33,4);
+ }
  add('field',valleyInvestigations.stations[roomIndex],33,5);
+ add('curiosity',questExtras.point(roomIndex),27);
  if(room().planOwner!==undefined)add('plan',researchSource(room().planOwner),37,6);
  add('operator',operatorPoint(),35,5);
  for(const student of students[roomIndex]||[])add('student',student,29,1,{studentId:student.name});
  if(roomIndex===9&&reported.has(9))add('marker',surveyMarker,33);
  if(roomIndex!==9)add('talk',talkPoint(),36,5);
- for(const door of links[roomIndex])add('door',threshold[door.dir],33,2,{door});
+ for(const door of links[roomIndex]){
+  if(roomIndex===observatory.lobby&&door.to===observatory.secret&&!observatoryState.aligned)continue;
+  add('door',threshold[door.dir],33,2,{door});
+ }
  const lab=currentLab();
  if(lab&&!labDone()){
   for(const control of scienceLabs.targets(lab))add('lab',control.point,32,5,{control});
@@ -1385,9 +1593,15 @@ function activeInteraction(){
 }
 const zone=()=>activeInteraction()?.kind||'';
 
-const enter=(index,entry)=>{
+const enter=(index,entry,spawn,resuming=false)=>{
+ if(index!==roomIndex){
+  observatory.cancelTrials();
+  observatoryRepair=null;
+  if(observatory.floorFor(index)!==observatory.floorFor(roomIndex))observatory.returnPart(roomIndex,observatoryState);
+ }
+ if(index===observatory.offworld)observatoryState.arrived=true;
  const leaving=currentLab();
- if(leaving){leaving.carry=null;leaving.adjust=null;}
+ if(leaving&&!resuming){leaving.carry=null;leaving.adjust=null;}
  if(avatar&&animation&&roomIndex!==6)attempts.set(roomIndex,animation);
  originalLoad(index);
  roomEntry=entry||null;
@@ -1404,32 +1618,41 @@ const enter=(index,entry)=>{
   if(spot)Object.assign(player,spot);
   else Object.assign(player,{x:176,y:253});
   player.facing=adventure.face('south',-from.dx,-from.dy);
+ }else if(spawn||observatory.inside(index)){
+  Object.assign(player,spawn||observatory.entry);
  }else{player.x=176;player.y=253;}
  refreshProgress();
  const prompt=operatorPrompt();
- say(prompt?(index===0&&!solved.has(0)?'Mira is stranded on the lift.':''):objective());
+ const lab=currentLab();
+ const last=resuming&&!labDone()&&lab?.lastFeedback;
+ const progress=resuming&&!labDone()&&lab&&(lab.calibrated||lab.brakes||lab.load||lab.carry||lab.piston!==null);
+ const context=last?'Last result: '+last+' '+objective():progress?'Experiment setup restored. '+objective():objective();
+ say(prompt?(index===0&&!solved.has(0)?'Mira is stranded on the lift.':''):context);
  renderActions();
  if(!onTitle)music.setTheme(chapterTheme(index,finished));
  if(index===10&&entry&&!vistaSeen)showVista();
+ if(index===observatory.lobby&&!observatoryState.intro)openObservatoryIntro();
+ if(!resuming)observatory.dispatch('enter',index,observatoryState,observatoryEventActions);
  saveProgress();
 };
-const passageHalf=.12;
+const passageHalf=.14;
 function beginPassage(door){
- const entry=opposite[door.dir];
+ const entry=door.spawn?null:opposite[door.dir];
  music.playDoorCue();
- if(reducedMotion()){enter(door.to,entry);return;}
- roomTransition={door,entry,start:time,elapsed:0,switched:false};
+ if(reducedMotion()){enter(door.to,entry,door.spawn);return;}
+ const portal=roomIndex===observatory.offworld||door.to===observatory.offworld;
+ roomTransition={door,entry,portal,start:time,elapsed:0,switched:false};
  syncUtilityButtons();
 }
 function advancePassage(now){
  const transition=roomTransition;
  if(!transition)return;
  transition.elapsed=Math.max(0,now-transition.start);
- if(transition.elapsed>=passageHalf&&!transition.switched){
+ if((transition.elapsed>=passageHalf||reducedMotion())&&!transition.switched){
   transition.switched=true;
-  enter(transition.door.to,transition.entry);
+  enter(transition.door.to,transition.entry,transition.door.spawn);
  }
- if(transition.elapsed>=2*passageHalf){roomTransition=null;syncUtilityButtons();}
+ if(transition.elapsed>=2*passageHalf||reducedMotion()){roomTransition=null;syncUtilityButtons();}
 }
 loadRoom=function(index){enter(index);};
 start=function(name){
@@ -1483,6 +1706,15 @@ function interact(){
   if(where==='marker'){readMarker();return;}
  if(where==='exit'){finishStory();return;}
  if(where==='arrival'){arrival();return;}
+ if(where==='observatory-exit'){
+  beginPassage({dir:'south',to:13,spawn:observatory.exteriorSpawn});return;
+ }
+ if(where==='observatory-station'){observatoryStation(target.control.id);return;}
+ if(where==='observatory-guide'){
+  observatoryFacing.set(target.point.name,adventure.face('south',player.x-target.point.x,player.y-target.point.y));
+  talkObservatory(target.point);return;
+ }
+ if(where==='curiosity'){questExtras.show(target.point.id);return;}
  if(where==='door'){
   const door=target.door;
   if(isOpen(door))beginPassage(door);
@@ -1507,6 +1739,8 @@ function interact(){
  say('Walk up to an instrument, person, or doorway, then press E.');
 }
 function lockedText(door){
+ const stair=observatory.locked(roomIndex,door.to,observatoryState);
+ if(stair)return stair;
  if(challengeLatch(door)){
   return needsReport(roomIndex)
    ?operatorPrompt()
@@ -1523,13 +1757,22 @@ function interactionLabel(target){
    return measure?'Use '+scienceLabs.instrumentByRoom[roomIndex].toLowerCase():target.control.label;
   }
   case 'field': return 'Study the '+target.point.name.toLowerCase();
+  case 'curiosity': return 'Inspect curiosity';
   case 'operator': return needsReport(roomIndex)?'Explain the repair':'Talk to '+operators[roomIndex][0];
   case 'talk': return 'Talk';
   case 'student': return 'Listen to '+target.point.name;
   case 'plan': return (recovered.has(room().planOwner)?'Review ':'Inspect ')+target.point.name;
   case 'marker': return 'Read the survey marker';
   case 'exit': return 'Read diagnostics';
-  case 'arrival': return 'Inspect observatory entrance';
+  case 'arrival': return 'Enter the Observatory';
+  case 'observatory-exit': return 'Return to the valley';
+  case 'observatory-station': return target.control.label;
+  case 'observatory-guide': {
+   const floor=observatory.floorFor(roomIndex);
+   if(floor?.room===roomIndex&&observatory.awaitingReport(observatoryState,floor.index))return 'Explain the repair to '+observatory.leadName(floor);
+   if(target.point.studyGuide)return 'Discuss the demonstration with '+target.point.name.split(' ').at(-1);
+   return 'Talk to '+target.point.name;
+  }
   case 'console': return needsReport(roomIndex)?'Report to the operator':'Review the plan';
   case 'door':
    if(isOpen(target.door))return 'Enter '+rooms[target.door.to].name;
@@ -1636,9 +1879,264 @@ function showVista(){
 function arrival(){
  arrived=true;
  saveCheckpoint(13);
- say('Desert Observatory reached.');
- dialog('<h2>Desert Observatory</h2><p>The entrance is dark. An old conduit runs from its door toward the dome. Whatever is stopping the portal from opening, it starts here.</p><p class="tag">END OF THIS DEMO</p><button class="gold" id="dismiss">Explore outside</button>');
+ beginPassage({dir:'north',to:observatory.lobby,spawn:observatory.entry});
+}
+function openObservatoryIntro(){
+ observatory.showIntro(()=>{
+  close();
+  observatoryState.intro=true;
+  Object.assign(player,observatory.telescopeSpawn);
+  roomEntry=null;
+  saveProgress();
+  say(objective());
+  renderActions();
+ });
+}
+function observatoryReportEvidence(floor){
+ const [first,second,relay]=observatory.reportEvidence(observatoryState,floor.index);
+ const escape=observatory.escape;
+ if(!first&&!second&&!relay){
+  const reading=observatoryState.reports[floor.index].reading;
+  return '<p>This saved repair has no trial comparison.'+
+   (reading?' Recorded result: '+escape(reading):'')+'</p>';
+ }
+ const cards=[first,second].map((row,i)=>'<article class="report-trial"><h3>'+floor.debrief.labels[i]+'</h3>'+
+  (row?'<small>'+escape(row.settings)+'</small><p>'+escape(row.reading)+'</p>':'<p>Reading unavailable in this save.</p>')+'</article>');
+ return '<h3>Your repair trials</h3><div class="report-trials">'+cards.join('')+'</div>'+
+  (relay?'<p><strong>'+escape(relay.settings)+'</strong> · '+escape(relay.reading)+'</p>':'');
+}
+function explainObservatoryRepair(person,floor,retrying=false){
+ const {question,explanation,misconception,hint}=floor.debrief;
+ const report=observatoryState.reports[floor.index];
+ const feedback=retrying?'<p class="report-feedback" role="status">'+hint+' Try again.</p>':'';
+ showSpeech(person.name,question,'explaining',observatoryReportEvidence(floor)+feedback+
+  '<div class="dialog-choices" id="topics"></div><hr><button id="dismiss">I’ll check my notes</button>',{focus:false});
+ const choices=[[explanation,true],[misconception,false]];
+ if(floor.index%2)choices.reverse();
+ for(const [text,correct] of choices){
+  button($('topics'),text,()=>{
+   if(!correct){explainObservatoryRepair(person,floor,true);return;}
+   if(!observatory.awaitingReport(observatoryState,floor.index))return;
+   report.confirmed=true;
+   saveProgress();
+   refreshProgress();
+   const next=objective();
+   say(next);
+   renderActions();
+   music.playRepairCue();
+   const message=floor.index===0?'Mira’s field meter is yours to take upstairs. ':'';
+   const followUp=observatory.followUp(floor.room);
+   showSpeech(person.name,'That matches the readings. '+message+followUp.greeting,'celebratory',
+    '<div class="dialog-choices" id="topics"></div><hr><button class="gold" id="dismiss">Back to the lab</button>',{focus:false});
+   button($('topics'),followUp.topic[0],()=>{
+    showSpeech(person.name,followUp.topic[1],'explaining','<button class="gold" id="dismiss">Back to the lab</button>');
+    $('dismiss').onclick=close;
+   });
+   $('dismiss').onclick=close;
+   setChoice(1);
+  });
+ }
  $('dismiss').onclick=close;
+ setChoice(0);
+}
+function nacreReport(){
+ const measurements=observatory.floors.filter(floor=>observatoryState.reports[floor.index]?.reading).slice(0,3);
+ const list=measurements.map(floor=>'<li><strong>'+floor.system+'</strong> · '+observatory.escape(observatoryState.reports[floor.index].reading)+'</li>').join('');
+ return '<h3>Expedition filed with Archivist Vela</h3><p>The Observatory is online and Nacre has acknowledged your expedition.</p>'+
+  (list?'<h3>Measurements from your expedition</h3><ul class="journal-checks">'+list+'</ul>':'<p>This expedition was restored from a save with no recorded lab measurements.</p>')+
+  '<p>Vela found a similar fault in an older archive entry. You can return through the south stargate whenever you’re ready.</p>';
+}
+function meetVela(person){
+ if(!observatoryState.archived){
+  showSpeech(person.name,'Your beacon reached Nacre. May I add your measurements and repairs to the Archive?','happy',
+   '<div class="choices"><button class="gold" id="file-report">Share field report</button><button id="dismiss">Keep exploring</button></div>');
+  $('file-report').onclick=()=>{
+   if(!observatoryState.arrived||!observatory.ready(observatoryState))return;
+   observatoryState.archived=true;
+   saveProgress();
+   say(objective());
+   renderActions();
+   music.playObservatoryCue();
+   meetVela(person);
+  };
+  $('dismiss').onclick=close;
+  return;
+ }
+ showSpeech(person.name,'Your field report is filed. The Observatory is back online, and we have a record of how you restored it. Welcome to the Archive.','happy',
+  '<div class="choices"><button class="gold" id="dismiss">Keep exploring</button><button id="return-observatory">Return to the Observatory</button><button id="view-field-report">View field report</button></div>');
+ $('dismiss').onclick=close;
+ $('return-observatory').onclick=()=>{
+  const gate=links[roomIndex].find(door=>door.to===observatory.secret);
+  if(gate&&isOpen(gate)){close();beginPassage(gate);}
+ };
+ $('view-field-report').onclick=()=>showNotebook('archive');
+}
+function showStudyQuestion(person,floor,state){
+ const study=observatory.studies[floor.index];
+ const measured=state.observations[floor.index].some(row=>row.source==='Study');
+ const prediction=study.choices[state.predictions[floor.index]];
+ const question=measured&&prediction?'You predicted: “'+prediction+'” '+study.question:measured?study.question:study.prediction;
+ showSpeech(person.name,question,'explaining',
+  '<div class="dialog-choices" id="topics"></div><hr><button id="dismiss">Back to the study room</button>',{focus:false});
+ for(const [choice,answer] of study.choices.entries()){
+  button($('topics'),answer,()=>observatory.dispatch('answer',roomIndex,state,observatoryEventActions,{person,choice}));
+ }
+ for(const [question,hint] of person.topics)button($('topics'),question,()=>showStudyReply(person,floor,state,hint,'explaining'));
+ $('dismiss').onclick=close;
+ setChoice(0);
+}
+function showStudyReply(person,floor,state,message,mood,prediction=false){
+ showSpeech(person.name,message,mood,
+  prediction
+   ?'<div class="choices"><button class="gold" id="dismiss">Back to the study room</button></div>'
+   :'<div class="choices"><button class="gold" id="study-retry">Back to the question</button><button id="dismiss">Back to the study room</button></div>');
+ if(!prediction)$('study-retry').onclick=()=>showStudyQuestion(person,floor,state);
+ $('dismiss').onclick=close;
+}
+const observatoryEventActions={
+ invite({room,state}){
+  const guide=observatory.people(room,state).find(person=>person.studyGuide);
+  say(objective()+' Speak to '+guide.name.split(' ').at(-1)+' for an optional question.');
+ },
+ save(){saveProgress();},
+ study({person,floor,state}){showStudyQuestion(person,floor,state);},
+ studyReply({person,floor,state,choice,evidence}){
+  if(!evidence){
+   showStudyReply(person,floor,state,'Prediction noted. Test your prediction at the bench, record a reading, then come back.','explaining',true);
+   return;
+  }
+  const study=observatory.studies[floor.index];
+  const correct=choice===study.answer;
+  const prefix=correct?'Exactly. ':'Try checking that at the demonstration. ';
+  showStudyReply(person,floor,state,prefix+study.feedback,correct?'happy':'explaining');
+ },
+ debrief({person,floor}){explainObservatoryRepair(person,floor);},
+ repairScene({room}){observatoryRepair={room,start:performance.now()};}
+};
+function talkObservatory(person){
+ if(roomIndex===observatory.offworld){meetVela(person);return;}
+ if(observatory.dispatch('talk',roomIndex,observatoryState,observatoryEventActions,{person}))return;
+ const reaction=observatory.reaction(roomIndex,observatoryState);
+ const floor=observatory.floorFor(roomIndex);
+ if(floor?.room===roomIndex&&observatory.confirmed(observatoryState,floor.index)){
+  const {greeting,topic}=observatory.followUp(roomIndex);
+  const topics=[topic,...person.topics];
+  if(reaction)topics.push(['What did my last reading show?',reaction]);
+  talk({...person,greeting,topics,mood:person.name==='Mira'?'celebratory':person.mood});
+  return;
+ }
+ if(person===observatory.technician){
+  talk({...person,greeting:objective(),mood:observatory.ready(observatoryState)?undefined:'explaining',topics:[
+   ['What are we repairing?','Each floor restores one telescope system. Its study room has a demonstration.'],
+   ['What is the telescope looking for?','A beacon from the archive in the Castle’s records. Can you get the telescope tracking that signal again?']
+  ]});
+ }else if(person.name==='Mira'&&!observatory.done(observatoryState,0)&&!observatoryState.charge.held){
+  showSpeech(person.name,reaction||person.greeting,person.mood,'<div class="choices"><button class="gold" id="hold-plate">Ask Mira to hold the plate</button><button id="dismiss">Leave conversation</button></div>');
+  $('hold-plate').onclick=()=>{
+   observatoryState.charge.held=true;
+   close();
+   saveProgress();
+   say('Mira opens the shutter. Seat one cell and fire a pulse to the short mark.');
+   renderActions();
+  };
+  $('dismiss').onclick=close;
+ }else if(person.name==='Mira'){
+  talk({...person,mood:'determined',greeting:reaction||
+   'I’m holding the shutter open. Try one contribution first, then send the particles farther with two.'});
+ }else talk(person,reaction||person.greeting);
+}
+function finishObservatoryAction(result,index){
+ const repaired=observatory.done(observatoryState,index);
+ const practicing=observatory.trialState(roomIndex,observatoryState)!==observatoryState;
+ if(result.observation)observatory.record(observatoryState,index,practicing?'Practice':'Repair',result.observation);
+ if(result.solved&&!repaired){
+  observatoryState.reports[index]={complete:true,confirmed:false,reading:result.reading};
+  if(index===0)observatoryState.charge.held=false;
+  observatory.dispatch('repair',roomIndex,observatoryState,observatoryEventActions);
+  music.playObservatoryCue();
+  refreshProgress();
+  say(result.text);
+ }else say(practicing&&result.solved?'Practice result. '+(result.observation?.reading||result.text):result.text);
+ saveProgress();
+ renderActions();
+}
+function confirmObservatoryRestart(){
+ observatory.panel('Restart Observatory labs?',
+  'This clears the four lab repairs, confirmations, Observatory readings, and the route to Nacre. Your castle and valley progress stays saved.',
+  [['Restart labs',()=>{
+   observatory.cancelTrials();
+   observatoryState=observatory.fresh();
+   observatoryRepair=null;
+   observatoryState.intro=true;
+   close();
+   enter(observatory.lobby,null,observatory.telescopeSpawn);
+  }]],()=>observatoryStation('telescope'),'Keep lab progress');
+ setChoice(1);
+}
+function observatoryStation(control){
+ const floor=observatory.floorFor(roomIndex);
+ if(control==='telescope'){
+  const count=observatory.floors.filter(item=>observatory.confirmed(observatoryState,item.index)).length;
+  const online=observatory.ready(observatoryState);
+  const message=observatoryState.aligned?'The telescope is tracking the beacon. Follow the illuminated cable to the east wall.':
+   online?'The mount and receiver are ready. Use the Castle’s coordinates to find the beacon, then tune the receiver.':
+   'The telescope is waiting for the lab reports. '+count+' of 4 repairs confirmed. '+objective();
+  const actions=online&&!observatoryState.aligned?[['Acquire the beacon',()=>{
+   observatory.beacon(observatoryState,saveProgress,strength=>{
+    observatoryState.aligned=true;
+    saveProgress();
+    music.playObservatoryCue();
+    observatory.showReveal('telescope',()=>{
+     close();say(objective());renderActions();
+    },strength);
+   });
+  }]]:[];
+  actions.push(['Replay the opening',openObservatoryIntro]);
+  if(observatoryState.aligned)actions.push(['Inspect the hidden spectrum',()=>questExtras.show('spectrum',()=>observatoryStation('telescope'))]);
+  actions.push(['Restart Observatory labs',confirmObservatoryRestart]);
+  observatory.panel('Observatory telescope',message,actions);
+  return;
+ }
+ if(control==='archive'){
+  questExtras.show('archive-spectrum');
+  return;
+ }
+ if(control==='signal'){
+  if(observatoryState.contact){
+   observatory.panel('Signal Chamber','The archive is holding a connection to Nacre Landing. The north stargate is open.',[]);
+  }else{
+   showSpeech('Archivist Vela','This is Archivist Vela of Nacre. If you can hear us, send a reply and we’ll open a passage.',undefined,
+    '<div class="choices" id="observatory-choices"></div>',{focus:false});
+   button($('observatory-choices'),'Transmit a reply',()=>{
+    observatoryState.contact=true;
+    saveProgress();
+    music.playObservatoryCue(true);
+    observatory.showReveal('gate',()=>{close();say(objective());renderActions();});
+   },'gold');
+   button($('observatory-choices'),'Back to the room',close).id='dismiss';
+   setChoice(0);
+  }
+  return;
+ }
+ if(control==='practice'){
+  const active=observatory.togglePractice(roomIndex,observatoryState);
+  say(active?objective():'Practice ended. '+objective());
+  renderActions();
+  return;
+ }
+ if(control==='demo'){
+  if(!observatoryState.notes.includes(floor.index)){
+   observatoryState.notes.push(floor.index);
+   saveProgress();
+  }
+  observatory.demonstration(floor.index,observatoryState,reading=>{
+   observatory.record(observatoryState,floor.index,'Study',reading);
+   if(!observatory.dispatch('reading',roomIndex,observatoryState,observatoryEventActions))saveProgress();
+  },saveProgress);
+  return;
+ }
+ const result=observatory.useControl(roomIndex,control,observatoryState);
+ finishObservatoryAction(result,floor.index);
 }
 function valleyMap(){
  const places=[
@@ -1647,10 +2145,11 @@ function valleyMap(){
  ];
  const known=places.filter(([id])=>surveyRead||visited.has(id)||links[id].some(door=>visited.has(door.to)));
  const markers=known.map(([id,x,y,name])=>{
+  const current=id===roomIndex||id===13&&observatory.inside(roomIndex);
   const shape=id===13?'<path d="M-12 6V0a12 12 0 0 1 24 0v6z" fill="#40564e" stroke="#208075" stroke-width="2"/><path d="M0 -11v17" stroke="#f0ce91" stroke-width="2"/>':
    id===10?'<path d="M-12 7v-18h5v4h4v-5h6v5h4v-4h5V7z" fill="#4b6562" stroke="#d2b98f" stroke-width="2"/>':
    '<circle r="5" fill="'+(visited.has(id)?'#3d5248':'#9e8259')+'" stroke="#eee1b5" stroke-width="2"/>';
-  return '<g transform="translate('+x+' '+y+')">'+(id===roomIndex?'<circle r="17" fill="#f5cb68" stroke="#6a5832" stroke-width="2"/>':'')+shape+'<text y="27" text-anchor="middle" fill="#2e3025" font-weight="700" font-size="11">'+name+'</text></g>';
+  return '<g transform="translate('+x+' '+y+')">'+(current?'<circle r="17" fill="#f5cb68" stroke="#6a5832" stroke-width="2"/>':'')+shape+'<text y="27" text-anchor="middle" fill="#2e3025" font-weight="700" font-size="11">'+name+'</text></g>';
  }).join('');
  const route='<path d="M73 171C111 174 136 166 188 171S269 171 318 157 388 142 431 132 M73 171Q66 96 124 58 Q191 39 287 56 Q336 86 318 157" fill="none" stroke="#79583e" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 8"/>';
  const gate=shortcutOpen?'':'<g transform="translate(321 105)" stroke="#68372b" stroke-width="3"><path d="M-7 -5v10m14-10v10M-7 0H7"/></g>';
@@ -1659,6 +2158,32 @@ function valleyMap(){
 }
 
 function mapView(){
+ if(observatory.inside(roomIndex)){
+  const next=observatory.nextFloor(observatoryState);
+  const node=(id,name,detail,waypoint=false)=>{
+   const here=id===roomIndex;
+   return '<div class="floor-node'+(here?' here':'')+(waypoint?' waypoint':'')+'"'+(here?' aria-current="location"':'')+'><strong>'+name+
+    '</strong><small>'+detail+(here?' · You are here':'')+(waypoint?' · Next stop':'')+'</small></div>';
+  };
+  const rows=observatory.floors.slice().reverse().map(floor=>{
+   const state=observatory.confirmed(observatoryState,floor.index)?'✓ Confirmed':observatory.awaitingReport(observatoryState,floor.index)?'! Awaiting explanation':'○ Repair pending';
+   const study=node(floor.side,floor.study,floor.studyDoor==='west'?'West study':'East study');
+   const lab=node(floor.room,floor.name,'Floor '+(floor.index+1)+' · '+state,floor===next);
+   const branch='<span class="floor-branch" aria-hidden="true"></span>';
+   return floor.studyDoor==='west'?'<li class="study-west">'+study+branch+lab+'</li>':
+    '<li class="study-east">'+lab+branch+study+'</li>';
+  }).join('');
+  const lobby=observatoryState.aligned?'Telescope locked · Signal Chamber east':'Valley exit south';
+  const route=observatoryState.aligned?'<li class="floor-extension">'+node(observatory.secret,'Signal Chamber','East of lobby',!observatoryState.contact)+
+   (observatoryState.contact?node(observatory.offworld,'Nacre Landing','North through the stargate',!observatoryState.archived):'')+'</li>':'';
+  dialog('<h2>Observatory map</h2><p>'+observatory.objective(observatory.lobby,observatoryState)+'</p>'+
+   '<ol class="floor-map" aria-label="Observatory floors, top to bottom">'+rows+
+   '<li>'+node(observatory.lobby,'Observatory Lobby','Ground floor · '+lobby,!next&&!observatoryState.aligned)+'</li>'+route+'</ol>'+
+   '<div class="choices"><button id="dismiss" class="gold">Back to journal</button><button id="show-valley-map">Valley map</button></div>');
+  $('dismiss').onclick=()=>showNotebook();
+  $('show-valley-map').onclick=valleyMap;
+  return;
+ }
  if(roomIndex>=10&&room().planOwner===undefined){valleyMap();return;}
  const levels=[
   ['Grounds',[[0,140,64],[9,286,64]]],
@@ -1766,23 +2291,14 @@ function drawFigures(figures){
   }
   const {point,look,facing,load}=figure;
   sprite(point.x,point.y,look,point.walking,facing);
+  if(look.task)observatory.drawStudyWork(look,reducedMotion()?0:time,{rect});
   if(load){
    rect(point.x-14,point.y-40,28,14,'#80654d');
    label(load+(roomIndex===0?' N':' kg'),point.x,point.y-29,'#fbdea3',10);
   }
  }
 }
-function draw(){
- ctx.imageSmoothingEnabled=false;
- const transition=roomTransition;
- const strength=transition?Math.max(0,1-Math.abs(transition.elapsed/passageHalf-1)):0;
- const ease=strength*strength*(3-2*strength);
- if(transition){
-  rect(0,0,720,360,'#0d1317');
-  const {dx,dy}=threshold[transition.door.dir];
-  const offset=Math.round((transition.switched?1:-1)*10*ease);
-  ctx.save();ctx.translate(dx*offset,dy*offset);
- }
+function drawAdventureRoom(){
  const outside=roomIndex===0||(roomIndex>=9&&roomIndex<16);
  const lower=roomIndex===8||[3,4,5,6].includes(roomIndex);
  rect(0,0,720,360,outside?'#304b3e':'#30444b');
@@ -1873,7 +2389,43 @@ function draw(){
  if(roomIndex===9){riverBridge();scienceLabs.draw(currentLab(),time,{rect,line,label},gardenBridge);}
  if(roomIndex===13)drawObservatoryMarker();
  if(valleyInvestigations.stations[roomIndex])valleyInvestigations.drawStation(roomIndex,{rect,line},fieldReports.has(roomIndex));
- const figures=[];
+}
+function draw(){
+ ctx.imageSmoothingEnabled=false;
+ const transition=roomTransition;
+ const strength=transition?Math.max(0,1-Math.abs(transition.elapsed/passageHalf-1)):0;
+ const ease=strength*strength*(3-2*strength);
+ if(transition){
+  rect(0,0,720,360,'#0d1317');
+  const {dx,dy}=threshold[transition.door.dir];
+  const offset=transition.portal?0:Math.round((transition.switched?1:-1)*16*ease);
+  ctx.save();ctx.translate(dx*offset,dy*offset);
+ }
+ const inObservatory=observatory.inside(roomIndex);
+ if(inObservatory){
+  const doors=links[roomIndex].filter(door=>door.to!==observatory.secret||roomIndex!==observatory.lobby||observatoryState.aligned).map(door=>({
+   dir:door.dir,point:threshold[door.dir],open:isOpen(door),
+   gate:door.to===observatory.offworld||roomIndex===observatory.offworld,
+   label:door.to===observatory.secret?'SIGNAL':door.to===observatory.offworld?'NACRE':
+    roomIndex===observatory.offworld?'RETURN':roomIndex===observatory.secret?'LOBBY':
+    door.to===observatory.floorFor(roomIndex)?.side?'STUDY':roomIndex===observatory.floorFor(roomIndex)?.side?'LAB':
+    ({north:'UP',south:'DOWN'})[door.dir]}));
+  if(roomIndex===observatory.lobby){
+   const next=observatory.nextFloor(observatoryState);
+   const stairs=doors.find(door=>door.dir==='north');
+   if(next&&stairs)stairs.label='TO FLOOR '+(next.index+1);
+   doors.push({dir:'south',point:observatory.exit,open:true,label:'VALLEY'});
+  }
+  const still=reducedMotion();
+  const elapsed=observatoryRepair?performance.now()-observatoryRepair.start:900;
+  if(still||elapsed>=900)observatoryRepair=null;
+  const phase=observatoryRepair?.room===roomIndex?elapsed/900:1;
+  observatory.drawRoom(roomIndex,{rect,line,label},observatoryState,doors,still?0:time,phase);
+ }
+ else drawAdventureRoom();
+ questExtras.draw(roomIndex,curiosities,{rect,label});
+ const figures=observatory.backgroundPeople(roomIndex).map(person=>({point:person,look:person,facing:person.facing}));
+ for(const person of observatory.people(roomIndex,observatoryState))figures.push({point:person,look:person,facing:observatoryFacing.get(person.name)||'south'});
  const op=operatorPoint(), npc=roomIndex===9?null:talkPoint();
  if(op)figures.push({point:op,look:{coat:operatorCoats[roomIndex],hair:'#53484a'},facing:operatorFacing.get(roomIndex)||'south'});
  if(roomIndex===0&&solved.has(0))figures.push({point:mira,look:miraLook,facing:mira.facing||'south'});
@@ -1881,23 +2433,51 @@ function draw(){
  for(const student of students[roomIndex]||[])figures.push({point:student,look:student,facing:student.facing||'north'});
  if(avatar&&!onTitle)figures.push({point:player,look:avatars[avatar],facing:player.facing,load:currentLab()?.carry});
  drawFigures(figures);
- if(op&&repairFlash?.room===roomIndex&&!reducedMotion()){
+ const labSetup=inObservatory?observatory.trialState(roomIndex,observatoryState):null;
+ if(labSetup&&avatar&&!onTitle&&observatory.floorFor(roomIndex)?.room===roomIndex&&labSetup.carry!==null){
+  rect(player.x-18,player.y-37,36,13,'#263438');
+  label(observatory.carryLabel(labSetup.carry),player.x,player.y-27,'#f5d792',11);
+ }
+ if(avatar&&!onTitle&&roomIndex===observatory.floors[3].room&&labSetup.coil.compass&&(labSetup!==observatoryState||!observatory.done(observatoryState,3))){
+  rect(player.x-8,player.y-39,16,15,'#263438');
+  label('N',player.x,player.y-28,'#f5d792',10);
+ }
+ if(repairFlash?.room===roomIndex&&op&&!reducedMotion()){
+  const origin={x:op.x,y:op.y-29};
   const phase=time-repairFlash.start;
   if(phase>=0&&phase<1.1){
    ctx.save();ctx.globalAlpha=1-phase/1.1;
+   const glint='#ffe2a1';
    for(let i=0;i<5;i++){
     const angle=i*Math.PI*2/5;
-    const x=op.x+Math.cos(angle)*(10+27*phase), y=op.y-29+Math.sin(angle)*(10+19*phase)-9*phase;
-    rect(x-1,y-3,2,6,'#ffe2a1');rect(x-3,y-1,6,2,'#ffe2a1');
+    const x=origin.x+Math.cos(angle)*(10+27*phase), y=origin.y+Math.sin(angle)*(10+19*phase)-9*phase;
+    rect(x-1,y-3,2,6,glint);rect(x-3,y-1,6,2,glint);
    }
    ctx.restore();
   }
  }
  if(canMove()){
   const target=activeInteraction();
-  if(op&&operatorPrompt()&&target?.kind!=='operator'){
-   rect(op.x-6,op.y-48,12,17,'#2d281c');
-   label('!',op.x,op.y-35,'#f7d891',13);
+  const lead=observatory.reportLead(roomIndex,observatoryState);
+  const marker=lead||(op&&operatorPrompt()&&target?.kind!=='operator'?op:null);
+  if(marker){
+   rect(marker.x-7,marker.y-51,14,18,'#2d281c');
+   label('!',marker.x,marker.y-38,'#f7d891',14);
+  }
+  const nextControl=observatory.labStep(roomIndex,observatoryState)?.control;
+  if(nextControl!==undefined&&target?.control?.id!==nextControl){
+   const next=observatory.controls(roomIndex,observatoryState).find(control=>control.id===nextControl);
+   if(next){
+    rect(next.x-9,next.y-31,18,13,'#203744');
+    label('◆',next.x,next.y-20,'#a8ede1',11);
+   }
+  }
+  if(!observatory.studyAnswered(roomIndex,observatoryState)){
+   const guide=observatory.people(roomIndex,observatoryState).find(person=>person.studyGuide);
+   if(guide){
+    rect(guide.x-7,guide.y-48,14,15,'#293947');
+    label('?',guide.x,guide.y-36,'#efcc81',13);
+   }
   }
   if(target){
    const {x,y}=target.point;
@@ -1908,7 +2488,8 @@ function draw(){
  }
  if(transition){
   ctx.restore();
-  rect(0,0,720,360,'rgba(13,19,23,'+ease+')');
+  const shade=transition.portal?'22,31,51':'13,19,23';
+  rect(0,0,720,360,'rgba('+shade+','+ease+')');
  }
 };
 frame=function(now){
@@ -1927,8 +2508,12 @@ frame=function(now){
  patrol(now);
  originalFrame(now);
  valleyInvestigations.frame(now);
+ observatory.frame(now);
 };
 
+window.addEventListener('pointerdown',event=>{
+ if(['touch','pen'].includes(event.pointerType))setInputMode('touch');
+},{capture:true,passive:true});
 for(const event of ['pointerdown','keydown','click'])window.addEventListener(event,()=>music.unlock(),{capture:true,passive:true});
 window.addEventListener('pagehide',()=>music.exit());
 window.addEventListener('pageshow',event=>{if(event.persisted)music.restore();});
