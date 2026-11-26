@@ -33,11 +33,11 @@ Open [localhost:8000](http://localhost:8000/) and wait for **Offline ready** to 
 
 ## GitHub Pages
 
-1. Commit `src/`, `tools/`, `docs/`, and this README to `main`. The included `docs/` is ready to publish, including `docs/.nojekyll`.
-2. Open **Settings → Pages** and choose **Deploy from a branch**, then select **main** and **/docs**. [GitHub Pages publishing source documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
-3. Open the [published game](https://saturnaxis.github.io/PhysicsQuestRPG/). The `docs` folder serves as the site root.
+1. In the PhysicsQuestRPG repository, open **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
+2. Extract the release into the repository root. Commit and push the files to `main`, including `.github/workflows/pages.yml`. If you use GitHub’s web uploader, confirm that the workflow file appears at that exact path.
+3. Open **Actions → Deploy Mechanics Castle** and follow the build and deploy jobs. When deployment succeeds, open the [published game](https://saturnaxis.github.io/PhysicsQuestRPG/).
 
-For updates, edit the files under `src/`, run `python tools/build-pages.py`, and commit the source and regenerated `docs/` together. The build replaces generated `docs/` and refreshes the service worker’s offline asset list and cache key. Keep manual edits in `src/`. Add new asset types or locations to the build script so they are included in the cache. Close all open copies of the game and reopen it online to load an update.
+For future updates, edit `src/` and push to `main`. The workflow runs `python tools/build-pages.py`, regenerates the offline asset list and cache key, and publishes the contents of `docs/` at the game URL. You can also select **Run workflow** in the Actions tab. The local build command above is available for previewing changes before a push. Close all open copies of the game and reopen it online to load an update.
 
 ### Verify Google Tag Manager
 
