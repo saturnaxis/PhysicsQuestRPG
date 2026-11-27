@@ -1,13 +1,14 @@
 'use strict';
 
 // BEGIN GENERATED PRECACHE
-const buildVersion = "0bce2fff038cc1f647e1";
+const buildVersion = "d0748892b7e723a5e214";
 const assets = [
   "art/cart.png",
   "art/foreground.png",
   "art/guardian-comic.webp",
   "art/guardian.png",
   "art/inez-directions.png",
+  "art/meadow-ground.webp",
   "art/mira-directions.png",
   "art/nacre-arrival.webp",
   "art/observatory-failure.webp",
@@ -106,8 +107,14 @@ const assets = [
   "art/room-9.webp",
   "art/rowan-directions.png",
   "art/sage-directions.png",
+  "art/sana-directions.png",
+  "art/sol-directions.png",
+  "art/suri-directions.png",
+  "art/tamsin-directions.png",
   "art/teo-directions.png",
   "art/valley.webp",
+  "art/vega-directions.png",
+  "art/vela-directions.png",
   "audio/music-manager.js",
   "audio/music/challenge_room.flac",
   "audio/music/mechanics_exterior.flac",
@@ -118,6 +125,7 @@ const assets = [
   "audio/music/observatory_study.flac",
   "audio/music/overworld.flac",
   "comic.webp",
+  "exploration.js",
   "field-events.js",
   "gameplay.js",
   "icons/apple-touch-icon.png",

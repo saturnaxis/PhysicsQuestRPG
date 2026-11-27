@@ -5,7 +5,7 @@ const html = fs.readFileSync('docs/index.html','utf8');
 const elements = new Map(), timers = [], events = new Map(), frames = [], saved = new Map();
 const directionButtons=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].map(key=>({dataset:{key},setPointerCapture(){}}));
 const pads = [], canvasLabels = [], motionPreference = {matches:false};
-const canvasImages = [];
+const canvasImages = [], canvasSprites = [];
 let focusedElement;
 function element(){
  return {
@@ -35,19 +35,20 @@ sheet.querySelectorAll=()=>{
  return choices;
 };
 sheet.querySelector=selector=>sheet.querySelectorAll().find(choice=>choice.id&&selector.includes('#'+choice.id))||
- ['dismiss','comic-skip'].map(id=>({id,el:lookup(id)})).find(({id})=>selector.includes('#'+id)&&sheet.markup.includes('id="'+id+'"'))?.el;
-const ctx=new Proxy({fillText(text){canvasLabels.push(text);},drawImage(image){canvasImages.push(image.src);}}, {get:(value,key)=>value[key]||(key==='createRadialGradient'?()=>({addColorStop(){}}):()=>{})});
+ ['dismiss','comic-skip','toggle-tool-overlay'].map(id=>({id,el:lookup(id)})).find(({id})=>selector.includes('#'+id)&&sheet.markup.includes('id="'+id+'"'))?.el;
+const ctx=new Proxy({fillText(text){canvasLabels.push(text);},drawImage(image,...coords){canvasImages.push(image.src);canvasSprites.push(coords);}}, {get:(value,key)=>value[key]||(key==='createRadialGradient'?()=>({addColorStop(){}}):()=>{})});
 const scope=vm.createContext({
- URLSearchParams,assert,pads,directionButtons,canvasLabels,canvasImages,motionPreference,performance,hasPortrait:path=>Boolean(path)&&fs.existsSync('docs/'+path),focused:()=>focusedElement,navigator:{getGamepads:()=>pads},
+ Event:class {constructor(type){this.type=type;}},
+ URLSearchParams,assert,pads,directionButtons,canvasLabels,canvasImages,canvasSprites,motionPreference,performance,hasPortrait:path=>Boolean(path)&&fs.existsSync('docs/'+path),focused:()=>focusedElement,navigator:{getGamepads:()=>pads},
  Image:class {complete=true;naturalWidth=360;},
  document:{createElement:element,hidden:false,getElementById:lookup,querySelector:()=>({getContext:()=>ctx}),querySelectorAll:selector=>selector==='[data-key]'?directionButtons:[],addEventListener(){}},
- window:{matchMedia:()=>motionPreference,addEventListener(type,fn){if(!events.has(type))events.set(type,[]);events.get(type).push(fn);}},
+ window:{matchMedia:()=>motionPreference,dispatchEvent(event){for(const listener of events.get(event.type)||[])listener(event);},addEventListener(type,fn){if(!events.has(type))events.set(type,[]);events.get(type).push(fn);}},
  localStorage:{getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value),removeItem:key=>saved.delete(key)},
  requestAnimationFrame:fn=>frames.push(fn),setTimeout:fn=>timers.push(fn),
  key:(key,repeat=false,type='keydown')=>events.get(type).forEach(fn=>fn({key,repeat,preventDefault(){}})),
  flush:()=>timers.shift()()
 });
-for(const script of ['docs/audio/music-manager.js','docs/gameplay.js','docs/science-labs.js','docs/portraits.js','docs/scenery.js','docs/valley-investigations.js','docs/study-labs.js','docs/field-events.js','docs/observatory.js','docs/quest-extras.js'])
+for(const script of ['docs/audio/music-manager.js','docs/gameplay.js','docs/science-labs.js','docs/portraits.js','docs/scenery.js','docs/valley-investigations.js','docs/study-labs.js','docs/field-events.js','docs/observatory.js','docs/quest-extras.js','docs/exploration.js'])
  vm.runInContext(fs.readFileSync(script,'utf8'),scope);
 vm.runInContext(html.split('<script>')[1].split('</script>')[0],scope);
 vm.runInContext(`
@@ -72,26 +73,54 @@ function door(dir,to){
  at(threshold[dir],dir);interact();
  assert.equal(roomIndex,lastRoom);assert.equal(gameMode(),'transition');
  interact();assert.equal(roomIndex,lastRoom);
+ const sliding=Boolean(roomTransition.outgoing);
+ advancePassage(time+.07);
+ assert.equal(roomIndex,sliding?to:lastRoom);
  advancePassage(time+.3);assert.equal(roomIndex,to);
  assert.ok(canStand(player.x,player.y),'door arrival is on walkable ground');
 }
 function meet(){at(operatorPoint());interact();assert.match($('sheet').innerHTML,/topics/);$('dismiss').onclick();}
 function research(){
  const id=roomIndex, plan=plans[id];door(plan.dir,plan.room);
- at(researchSource(id));key('e');assert.match($('sheet').innerHTML,/Measurements/);
+ at(researchSource(id));
+ const wasRecovered=recovered.has(id);
+ key(id===1?'n':'e');
+ if(!wasRecovered){
+  assert.match($('sheet').innerHTML,/challenge/);
+  assert.equal($('topics').children.length,3);
+  assert.equal(recovered.has(id),false);
+  const prediction=researchPrediction(id);
+  if(id===0||id===1)assert.match($('topics').children[0].innerHTML,/<svg.*aria-hidden="true"/);
+  const answer=prediction.answer;
+  $('topics').children[(answer+1)%3].click();
+  assert.match($('sheet').innerHTML,/report-feedback/);
+  assert.equal(recovered.has(id),false);
+  $('topics').children[answer].click();
+  if(prediction.visual)assert.match($('sheet').innerHTML,/plan-confirmation/);
+ }
+ assert.match($('sheet').innerHTML,/Measurements/);
  assert.ok(acquired.has(scienceLabs.instrumentByRoom[id]));
  key('e',true);assert.equal($('modal').hidden,false);
  $('dismiss').onclick();door(opposite[plan.dir],id);
 }
 function report(id){
- assert.match($('operator-prompt').textContent,/Talk to .* to explain your repair/);
+ assert.match($('operator-prompt').textContent,/Talk to .* to explain the repair/);
  assert.ok(!$('operator-prompt').hidden);
  const {x,y}=scienceLabs.resetConsole(id);
  assert.ok(canStand(x,y),rooms[id].name+' clears the reset console after the successful trial');
  assert.ok(canStand(360,251),rooms[id].name+' has no collision at the old console');
  at({x,y});assert.notEqual(activeInteraction()?.kind,'console');
  canvasLabels.length=0;draw();assert.ok(!canvasLabels.includes('Reset'),rooms[id].name+' removes the reset console artwork');
- at(operatorPoint());interact();$('topics').children[id%2].click();
+ at(operatorPoint());interact();
+ const {answer}=castleDebriefs[id];
+ assert.equal($('topics').children.length,3);
+ $('topics').children[(answer+1)%3].click();
+ assert.match($('sheet').innerHTML,/report-feedback.*Try again/);
+ assert.ok(!reported.has(id));
+ assert.ok(links[id].filter(door=>door.to!==plans[id].room).every(door=>!isOpen(door)));
+ $('dismiss').onclick();
+ at(operatorPoint());interact();
+ $('topics').children[answer].click();
  assert.ok(reported.has(id));$('dismiss').onclick();assert.ok($('operator-prompt').hidden);
 }
 assert.match($('sheet').innerHTML,/Choose your character/);
@@ -106,7 +135,26 @@ for(const name of speakers)assert.ok(hasPortrait(portraits.get(name)),name+' has
 assert.ok(hasPortrait(portraits.get('Mira','relieved')));
 assert.ok(hasPortrait(portraits.get('Rowan','thinking')));
 assert.ok(hasPortrait(portraits.get('Lift operator Sol','concerned')));
-$('avatars').children[0].click();$('comic-skip').onclick();assert.equal(music.target,'mechanics_exterior');
+function skipOpening(interludes){
+ const needsConfirmation=Boolean(savedRun);
+ $('avatars').children[0].click();
+ if(needsConfirmation)$('restart').click();
+ for(let i=0;i<interludes;i++){
+  $('comic-next').click();
+  assert.match($('sheet').innerHTML,/crawl-window/);
+  if(i+1<interludes)$('comic-next').click();
+ }
+ $('comic-skip').click();
+ assert.equal(onTitle,false);
+ assert.equal($('modal').hidden,true);
+ assert.equal(roomIndex,0);
+ assert.equal(music.target,'mechanics_exterior');
+}
+skipOpening(1);
+clearSession();intro();
+skipOpening(2);
+clearSession();intro();
+skipOpening(0);
 // A direction held while opening dialogue must not move its default selection.
 const dialogPad=Array.from({length:16},()=>({pressed:false}));
 pads.push({mapping:'standard',buttons:dialogPad});
@@ -145,7 +193,10 @@ assert.equal(scienceLabs.pistonForce(30,0),600);
 assert.equal(scienceLabs.pistonForce(40,1),320);
 assert.deepEqual(scienceLabs.brakeMomenta(1,-1,1),{cart:-10,guardian:10,total:0});
 assert.deepEqual(scienceLabs.brakeMomenta(1,1,1),{cart:10,guardian:10,total:20});
-assert.deepEqual(scienceLabs.brakeMomenta(1,1,-1),{cart:10,guardian:-10,total:0});
+assert.deepEqual(scienceLabs.brakeMomenta(0,1,-1,1),{cart:6,guardian:-6,total:0});
+assert.deepEqual(scienceLabs.brakeMomenta(1,1,-1,1),{cart:10,guardian:-6,total:4});
+assert.equal(scienceLabs.guardianCycle(0,0).open,false);
+assert.equal(scienceLabs.guardianCycle(0,0,true).open,true);
 assert.equal(scienceLabs.crankTorque(40),20);
 assert.ok(scienceLabs.measurements(scienceLabs.make(9),null)[0].includes('15 cm'));
 assert.ok(scienceLabs.measurements(scienceLabs.make(5,true),null).some(line=>line.includes('200 cm²')));
@@ -164,6 +215,20 @@ for(const speed of [1,3,4]){
  assert.ok(Math.abs(incomingCartX(speed,trial.approachTime)-320)<1e-9);
  assert.ok(Math.abs(incomingCartX(speed,trial.approachTime+trial.coupledSpeed)-320-trial.distance*62)<1e-9);
 }
+const sampleDots=[];
+const sled=scienceLabs.make(1);
+sled.trial={...scienceLabs.friction(1),key:'friction',index:1,started:0};
+scienceLabs.drawOverlay(sled,1,{rect(x,y,w,h){if(w===3&&h===3)sampleDots.push(x);},line(){},label(){}});
+assert.equal(sampleDots.length,6);
+assert.ok(sampleDots[1]-sampleDots[0]>sampleDots[5]-sampleDots[4]);
+const compassNeedle=polarity=>{
+ const state=observatory.fresh();state.coil.compass=true;state.coil.polarity=polarity;
+ const strokes=[];
+ observatory.compassOverlay(observatory.floors[3].room,state,{x:330,y:243},
+  {rect(){},line(...args){strokes.push(args);},label(){}});
+ return strokes[0][2]-strokes[0][0];
+};
+assert.ok(compassNeedle(1)>0&&compassNeedle(-1)<0);
 assert.match(researchDiagram(4),/Distance to choose/);
 assert.doesNotMatch(researchDiagram(4),/>2 m</);
 assert.ok(scienceLabs.measurements(scienceLabs.make(6,true),null)[0].includes('stopped'));
@@ -172,24 +237,46 @@ walkStraight({x:545,y:245},{x:575,y:245});
 assert.equal(activeInteraction()?.point.name,'June');
 key('e');assert.match($('sheet').innerHTML,/<h2>June<\\/h2>/);
 assert.equal(menuButtons().length,1);key('c');
-meet();research();
-key('n');assert.match($('sheet').innerHTML,/Current objective/);
-assert.match($('sheet').innerHTML,/Use the spring scale/);
+consulted.delete(0);
+assert.equal(consulted.has(0),false);
+assert.equal(recovered.has(0),false);
+use('weight-400');assert.equal(currentLab().carry,null);
+assert.match($('operator-prompt').textContent,/Talk to Lift operator Sol/);
+meet();
+use('lift-lever');assert.match($('feedback').textContent,/Hang a counterweight/);
+assert.ok(!researchRequired.has(0),'an incomplete setup does not spend the trial');
+use('weight-400');assert.equal(currentLab().carry,400);use('lift-hook');use('lift-lever');
+assert.ok(loadProgress().run.researchRequired.includes(0),'the trial is spent before the animation ends');
+flush();
+assert.equal(solved.has(0),false);assert.match($('feedback').textContent,/120 N.*does not rise/);
+assert.equal($('modal').hidden,true);
+use('reset');assert.equal(currentLab().load,400);
+use('lift-lever');assert.ok(!busy);
+assert.match($('operator-prompt').textContent,/Trial failed.*Lift service shed/);
+clearSession();resumeRun();
+assert.ok(researchRequired.has(0));
+use('lift-lever');assert.ok(!busy);
+research();
+at({x:176,y:253});key('n');assert.match($('sheet').innerHTML,/Current objective/);
+assert.match($('sheet').innerHTML,/Carry a test counterweight/);
 key('ArrowRight');key('e');
 assert.equal(focused(),$('journal-cards').children[0]);key('e');
 assert.match($('sheet').innerHTML,/Lift load sheet/);
 assert.match($('sheet').innerHTML,/Back to discoveries/);
 key('c');assert.match($('sheet').innerHTML,/Discovery cards · 1/);
 key('c');
-use('lift-lever');
+at(scienceLabs.equipment.liftLever);key('n');
 assert.match($('sheet').innerHTML,/Spring scale/);
 assert.match($('sheet').innerHTML,/520 N/);
+assert.match($('sheet').innerHTML,/Show force arrows/);
 assert.ok(recordedReadings.has(0));assert.equal(currentLab().attempts.lift,undefined);
 key('ArrowRight');key('e');assert.match($('sheet').innerHTML,/Readings taken at Castle approach/);
 key('c');
-use('lift-lever');assert.match($('feedback').textContent,/Hang a counterweight/);
-use('weight-400');assert.equal(currentLab().carry,400);use('lift-hook');use('lift-lever');flush();
-assert.equal(solved.has(0),false);assert.match($('feedback').textContent,/120 N/);
+at(scienceLabs.equipment.liftLever);key('n');key('n');
+assert.ok(activeOverlays.has(0));canvasLabels.length=0;draw();
+assert.ok(canvasLabels.includes('Counterweight · 400 N')&&canvasLabels.includes('Platform · 520 N'));
+at(scienceLabs.equipment.liftLever);key('n');$('toggle-tool-overlay').onclick();
+assert.ok(!activeOverlays.has(0));
 use('lift-hook');key('c');assert.equal(currentLab().carry,null);
 use('weight-680');
 walkStraight({x:243,y:249},{x:500,y:249});
@@ -206,7 +293,7 @@ assert.match($('feedback').textContent,/15 cm from axle/);
 assert.doesNotMatch($('feedback').textContent,/N·m/);
 const labels=[];
 scienceLabs.draw(currentLab(),time,{rect(){},line(){},label:text=>labels.push(text)});
-assert.deepEqual(labels,['15 cm','Reset']);
+assert.deepEqual(labels,['15 cm','○','Reset']);
 key('ArrowRight');key('e');
 assert.doesNotMatch($('feedback').textContent,/N·m/);
 flush();
@@ -217,6 +304,71 @@ assert.match($('feedback').textContent,/20 N·m/);
 assert.equal(isOpen(links[9].find(exit=>exit.dir==='west')),false);
 assert.equal(isOpen(links[9].find(exit=>exit.dir==='south')),true);
 report(9);at(surveyMarker);key('e');assert.ok(surveyRead);$('dismiss').onclick();
+const preShedSave=JSON.stringify(savedRun);
+function shedControl(id){
+ const point=exploration.controls(explorationState,player).find(control=>control.id===id);
+ assert.ok(point,'Available shed control: '+id);
+ assert.ok(canStand(point.x,point.y),'Control has walkable approach: '+id);
+ assert.ok(targetReachable(point,24),'Reachable shed control: '+id);
+ at(point,'east');
+ assert.equal(activeInteraction()?.control?.id,id);
+ interact();
+}
+function shedFrame(seconds=.4){
+ for(let elapsed=0;elapsed<seconds;elapsed+=.04)frame(previous+40);
+}
+function pushSled(){
+ at({x:explorationState.x-25,y:218},'east');
+ shedControl('east');shedFrame();
+}
+door('east',calibrationRoom);
+mapView();assert.match($('sheet').innerHTML,/Calibration Shed/);close();
+showNotebook('exploration');
+assert.match($('sheet').innerHTML,/East Garden survey · Complete/);
+assert.match($('sheet').innerHTML,/Earn two field badges/);close();
+shedControl('join');
+at({x:330,y:155});shedFrame(1);
+assert.ok(explorationState.mira.x>240);
+for(let i=0;i<8&&explorationState.x<528;i++)pushSled();
+assert.equal(explorationState.x,528);
+assert.match($('feedback').textContent,/3 kg/);
+assert.equal(explorationState.complete,false);
+shedControl('reset');
+shedControl('ballast');
+assert.equal(explorationState.mass,6);
+pushSled();assert.equal(explorationState.x,240);
+assert.match($('feedback').textContent,/60 cm on the oiled boards/);
+at({x:527,y:135});shedFrame(2);
+shedControl('hold');assert.ok(explorationState.held);
+const heldRun=JSON.parse(JSON.stringify(savedRun));
+clearSession();savedRun=heldRun;resumeRun();
+assert.equal(roomIndex,calibrationRoom);
+assert.equal(explorationState.x,240);
+assert.ok(explorationState.held);
+shedControl('hold');assert.equal(explorationState.held,false);
+shedControl('hold');assert.ok(explorationState.held);
+door('west',9);assert.equal(explorationState.held,false);
+door('east',calibrationRoom);assert.equal(explorationState.x,240);
+at({x:527,y:135});shedFrame(2);
+shedControl('hold');assert.ok(explorationState.held);
+for(let i=0;i<10&&explorationState.x<528;i++)pushSled();
+assert.equal(explorationState.x,528);
+assert.ok(explorationState.complete);
+assert.match($('feedback').textContent,/Calibration Badge earned/);
+$('status-message').scrollTop=28;
+renderActions();
+assert.equal($('status-message').scrollTop,28);
+shedControl('reset');assert.equal(explorationState.x,180);assert.ok(explorationState.complete);
+assert.equal($('status-message').scrollTop,0);
+showNotebook('exploration');
+assert.match($('sheet').innerHTML,/Disable Sprint Boots/);
+$('reward-boots').onclick();
+assert.match($('sheet').innerHTML,/Enable Sprint Boots/);close();
+assert.equal(loadProgress().run.exploration.boots,false);
+assert.ok(loadProgress().run.exploration.complete);
+clearSession();savedRun=JSON.parse(preShedSave);resumeRun();
+assert.equal(roomIndex,9);
+assert.equal(explorationState.complete,false);
 door('west',0);
 Object.assign(mira,{x:235,y:252,walking:false});
 at(mira);interact();assert.match($('sheet').innerHTML,/found the survey route/);$('dismiss').onclick();
@@ -249,19 +401,42 @@ key('c');motionPreference.matches=false;
 assert.equal(scienceLabs.acceleration(6),2);
 assert.equal(scienceLabs.friction(0).win,false);assert.equal(scienceLabs.friction(1).win,true);assert.equal(scienceLabs.friction(2).win,false);
 assert.equal(scienceLabs.collision(3).distance,2);assert.equal(scienceLabs.torque(2),0);
-door('west',1);meet();research();
+door('west',1);
+meet();use('lane-1');flush();
+assert.ok(solved.has(1)&&!reported.has(1)&&consulted.has(1)&&!recovered.has(1)&&!recordedReadings.has(1));
+assert.ok(!isOpen(links[1].find(exit=>exit.to===7)));
+clearSession();resumeRun();
+assert.ok(solved.has(1)&&!reported.has(1)&&!recovered.has(1));
+report(1);
+assert.ok(solved.has(1)&&reported.has(1)&&!recovered.has(1)&&!researchRequired.has(1));
+assert.ok(isOpen(links[1].find(exit=>exit.to===7)));
+reported.delete(1);
+// Exercise the plan-first friction path independently of the early win.
+solved.delete(1);labSessions.delete(1);consulted.delete(1);enter(1);
+meet();research();
 at({x:165,y:223});key('n');
 assert.match($('sheet').innerHTML,/Motion tracker/);
 assert.match($('sheet').innerHTML,/Launch speed · 4 m\\/s/);
 key('c');
-use('lane-0');flush();assert.match($('feedback').textContent,/rougher surface/);
-use('lane-2');flush();assert.match($('feedback').textContent,/more friction/);
-use('lane-0');flush();assert.match($('feedback').textContent,/middle-friction/);
+use('lane-0');flush();assert.match($('feedback').textContent,/5.1 m.*Target zone/);
+use('lane-2');flush();assert.match($('feedback').textContent,/1.7 m.*Target zone/);
+use('lane-0');flush();assert.match($('feedback').textContent,/5.1 m.*Target zone/);
 use('reset');assert.equal(currentLab().attempts.friction,undefined);
 use('lane-1');flush();report(1);door('east',7);
 assert.match($('feedback').textContent,/force calibration.*east/i);
 assert.doesNotMatch($('feedback').textContent,/friction track/i);
-door('east',2);meet();research();
+door('east',2);meet();
+use('force');
+assert.match($('feedback').textContent,/Research in the Calibration workshop through the north door.*test mass/);
+assert.equal(currentLab().adjust,null);
+assert.ok(!researchRequired.has(2));
+use('mass-2');use('plate');
+assert.ok($('feedback').textContent.includes('6 m/s²'));
+assert.match($('operator-prompt').textContent,/Trial failed.*Calibration workshop.*north door/);
+use('force');
+assert.match($('feedback').textContent,/Research in the Calibration workshop through the north door/);
+assert.equal(currentLab().adjust,null);
+research();use('reset');
 const midCastle=loadProgress();
 assert.equal(midCastle.version,2);
 assert.equal(midCastle.run.room,2);assert.equal(midCastle.run.entry,'north');
@@ -304,21 +479,38 @@ report(2);door('west',7);
 assert.match($('feedback').textContent,/both checks are logged/i);
 at({x:625,y:61},'north');keys.add('ArrowUp');frame(100);
 assert.equal(gameMode(),'transition');assert.equal(roomIndex,7);
-frame(390);keys.clear();
+frame(Math.round((roomTransition.start+.3)*1000));keys.clear();
 assert.equal(roomIndex,8);assert.ok(canStand(player.x,player.y));
 door('west',3);meet();research();dial('momentum',0);assert.match($('feedback').textContent,/0.5 m/);
 key('c');dial('momentum',3);report(3);door('east',8);
 door('east',4);meet();research();
-use('torque');assert.match($('sheet').innerHTML,/Lever-arm gauge/);
+at(scienceLabs.targets(currentLab()).find(control=>control.id==='torque').point);key('n');
+assert.match($('sheet').innerHTML,/Lever-arm gauge/);
 assert.match($('sheet').innerHTML,/1.0 m right of the pivot/);
 assert.equal(currentLab().adjust,null);key('c');
 dial('torque',0);assert.match($('feedback').textContent,/counterclockwise/);
 key('c');dial('torque',9);assert.ok(solved.has(4));report(4);door('west',8);
-door('north',5);meet();research();
-use('hydraulic');assert.match($('feedback').textContent,/Connect one/);
-use('piston-1');dial('hydraulic',5);assert.match($('feedback').textContent,/320 N/);
-key('c');use('reset');use('piston-0');dial('hydraulic',3);assert.ok(solved.has(5));report(5);
+door('north',5);
+assert.ok(!consulted.has(5)&&!recovered.has(5));
+meet();use('hydraulic');assert.match($('feedback').textContent,/Connect one/);
+use('piston-1');dial('hydraulic',5);assert.match($('feedback').textContent,/320 N.*gate stays down/);
+assert.equal(gameMode(),'exploration');
+assert.match($('operator-prompt').textContent,/Trial failed.*Pump service room/);
+use('reset');assert.equal(currentLab().piston,1);
+research();
+use('reset');use('piston-0');dial('hydraulic',3);assert.ok(solved.has(5)&&consulted.has(5)&&recovered.has(5));report(5);
+assert.ok(reported.has(5)&&recovered.has(5)&&isOpen(links[5].find(exit=>exit.to===6)));
 door('north',6);meet();research();
+const cycleStart=time;
+time=0;
+use('cart-1');use('launcher--1');
+assert.match($('feedback').textContent,/Launch window missed.*launcher reset/);
+assert.equal(busy,false);assert.equal(currentLab().brakes,0);
+assert.ok(!researchRequired.has(6));
+showPauseMenu();$('guardian-timing').click();$('dismiss').onclick();
+assert.equal(localStorage.getItem(guardianTimingKey),'on');
+time=cycleStart;
+use('reset');
 for(const {x} of scienceLabs.equipment.launchers){
  for(const npc of npcFeet())assert.ok(Math.abs(npc.x-x)>=54,'NPC artwork clears the launch plate');
 }
@@ -328,8 +520,10 @@ use('cart-1');use('launcher-1');flush();assert.ok($('feedback').textContent.incl
 use('launcher--1');flush();assert.equal(currentLab().brakes,1);assert.equal(currentLab().heading,-1);
 assert.ok($('feedback').textContent.includes('Cart −10, guardian +10, total 0 kg·m/s'));
 use('launcher--1');flush();assert.equal(currentLab().brakes,1);
-use('launcher-1');flush();assert.equal(currentLab().brakes,2);
-assert.ok($('feedback').textContent.includes('Cart +10, guardian −10, total 0 kg·m/s'));
+use('launcher-1');flush();assert.equal(currentLab().brakes,1);
+assert.ok($('feedback').textContent.includes('Cart +10, guardian −6, total +4'));
+use('cart-0');use('launcher-1');flush();assert.equal(currentLab().brakes,2);
+assert.ok($('feedback').textContent.includes('Cart +6, guardian −6, total 0 kg·m/s'));
 
 assert.ok(solved.has(6));report(6);
 assert.equal($('progress').style.width,100*6/7+'%');
@@ -367,6 +561,10 @@ close();
 assert.equal(loadProgress().run.fieldReports.length,2);
 clearSession();resumeRun();
 assert.equal(roomIndex,15);assert.equal(fieldReports.size,2);assert.equal(fieldReports.get(15).angularMomentum,12);
+assert.equal(valleySpeed(),1.2);
+showNotebook('exploration');
+$('reward-boots').onclick();assert.equal(valleySpeed(),1);
+$('reward-boots').onclick();assert.equal(valleySpeed(),1.2);close();
 door('north',12);
 door('east',13);at(observatory.entrance,'north');interact();advancePassage(time+.3);
 assert.equal(roomIndex,observatory.lobby);
@@ -539,6 +737,7 @@ function explainRepair(index){
  assert.match(interactionLabel(activeInteraction()),/Explain the repair/);
  key('e');
  const markup=$('sheet').innerHTML;
+ assert.equal($('topics').children.length,3);
  assert.match(markup,/Your repair trials/);
  const evidence=observatory.reportEvidence(observatoryState,index);
  evidence.forEach(row=>{
@@ -828,7 +1027,8 @@ for(const id of [0,1,2,3,4,5,6,9]){
  assert.ok(isOpen(researchExit),rooms[id].name+' leaves research access open');
  enter(id,plan.dir);
  consulted.delete(id);renderActions();
- assert.match($('operator-prompt').textContent,/Talk to .* beside the controls/);
+ assert.match($('operator-prompt').textContent,/Talk to .* to start the experiment/);
+ assert.match(objective(),/Talk to .* to start the experiment/);
  assert.ok(targetReachable(operatorPoint()));
  assert.equal(students[id].length,2);
  for(const student of students[id]){
@@ -842,7 +1042,7 @@ for(const id of [0,1,2,3,4,5,6,9]){
   $('dismiss').onclick();
   key('e');assert.notEqual(student.lastLine,first);
   assert.ok(!consulted.has(id));
-  assert.ok(!$('operator-prompt').hidden);
+  assert.match($('operator-prompt').textContent,/Talk to .* to start the experiment/);
   $('dismiss').onclick();
  }
  enter(id,plan.dir);
@@ -892,13 +1092,32 @@ enter(observatory.floors[3].side);
 assert.ok(targetReachable(questExtras.point(roomIndex),25));at(questExtras.point(roomIndex));interact();
 $('curiosity-actions').children[0].click();assert.match($('sheet').innerHTML,/field point west/);close();
 assert.deepEqual([...curiosities].slice(-3),['cow','sled','glove']);
+acquired.add(scienceLabs.instrumentByRoom[1]);
+showNotebook('exploration');
+assert.match($('sheet').innerHTML,/Earn five badges/);
+assert.match($('sheet').innerHTML,/Disable Vector Goggles/);
+assert.ok(overlayIsOn(1));
+$('reward-goggles').onclick();assert.equal(overlayIsOn(1),false);
+$('reward-goggles').onclick();assert.ok(overlayIsOn(1));close();
+toggleOverlay(1);assert.equal(overlayIsOn(1),false);
+assert.ok(loadProgress().run.exploration.hidden.includes(1));
+toggleOverlay(1);assert.ok(overlayIsOn(1));
+questExtras.show('spectrum');$('curiosity-actions').children[1].click();close();
+assert.equal(exploration.rewards(explorationBadges()).clue,false);
+questExtras.show('crate');$('curiosity-actions').children[0].click();close();
+showNotebook('exploration');assert.match($('sheet').innerHTML,/Stargate II/);close();
 
-solved.delete(2);labSessions.delete(2);enter(2);consulted.add(2);recovered.add(2);
+solved.delete(2);labSessions.delete(2);enter(2);consulted.add(2);
 const block=scienceLabs.targets(currentLab()).find(control=>control.id==='mass-4');
 at(block.point);interact();
 const scale=scienceLabs.targets(currentLab()).find(control=>control.id==='plate');
 at(scale.point);interact();
-currentLab().adjust='force';choosing=true;
+assert.ok(currentLab().calibrated&&!researchRequired.has(2));
+const forceLegacy=loadProgress().run;
+delete forceLegacy.researchRequired;forceLegacy.trialUsed=[2];
+clearSession();savedRun=forceLegacy;resumeRun();
+assert.ok(currentLab().calibrated&&!researchRequired.has(2));
+use('force');assert.equal(currentLab().adjust,'force');
 for(let step=0;step<11;step++)selectDirection('ArrowRight');
 assert.equal(currentLab().values.force,11.5);
 runLabDial();flush();
@@ -906,22 +1125,84 @@ clearSession();resumeRun();
 assert.equal(roomIndex,2);
 assert.equal(currentLab().values.force,11.5);
 assert.equal(currentLab().calibrated,true);
-assert.match($('feedback').textContent,/Last result.*Net force/);
+assert.ok(researchRequired.has(2));
+assert.match($('operator-prompt').textContent,/Trial failed.*Calibration workshop/);
+assert.doesNotMatch($('feedback').textContent,/Last result/);
+assert.ok(loadProgress().run.labs.every(([,lab])=>!Object.hasOwn(lab,'lastFeedback')));
 
-enter(6);solved.delete(6);labSessions.delete(6);
+enter(6);solved.delete(6);labSessions.delete(6);meet();
 const brake=currentLab();
 brake.cartIndex=1;testBrake(brake,-1);flush();
 assert.equal(brake.brakes,1);
-clearSession();resumeRun();
+assert.ok(!researchRequired.has(6));
+const brakeLegacy=loadProgress().run;
+delete brakeLegacy.researchRequired;brakeLegacy.trialUsed=[6];
+clearSession();savedRun=brakeLegacy;resumeRun();
 assert.equal(currentLab().brakes,1);assert.equal(currentLab().heading,-1);assert.equal(currentLab().cartIndex,1);
+assert.ok(!researchRequired.has(6));
+use('reset');assert.equal(currentLab().brakes,1);
+use('cart-0');use('launcher-1');flush();assert.ok(solved.has(6));
+report(6);assert.ok(!recovered.has(6));
 
+enter(10);
+// Door centers, sight lines, and the bridge deck have room to walk through.
+for(const id of [0,9,10,11,12,13,14,15]){
+ for(const entry of links[id]){
+  enter(id,entry.dir);
+  close();
+  for(const exit of links[id])assert.ok(targetReachable(threshold[exit.dir],14),rooms[id].name+' '+entry.dir+' to '+exit.dir);
+  const station=valleyInvestigations.stations[id];
+  if(station)assert.ok(targetReachable(station,26),station.name+' from '+entry.dir);
+ }
+}
+for(const id of [0,10]){
+ enter(id,'north');
+ for(let y=63;y<149;y+=4)for(const x of [610,625,640])assert.ok(canStand(x,y),rooms[id].name+' north lane');
+}
+enter(11,'west');
+for(let x=324;x<=394;x+=2)for(const y of [232,245,259])assert.ok(canStand(x,y),'Clear bridge deck');
+const liftMark=scienceLabs.repairMarker(scienceLabs.make(0,true));
+const liftLever=scienceLabs.equipment.liftLever;
+assert.ok(Math.hypot(liftMark.x-liftLever.x,liftMark.y-liftLever.y)<35);
+const liftLabels=[];
+scienceLabs.draw(scienceLabs.make(0,true),0,{rect(){},line(){},label:(...args)=>liftLabels.push(args)},true);
+assert.ok(liftLabels.some(([symbol,x,y])=>symbol==='✓'&&x===liftMark.x&&y===liftMark.y+4));
+assert.ok(!liftLabels.some(([text])=>text==='REPAIRED'));
 enter(10);
 const behindTree={x:77,y:97}, inFrontOfTree={x:77,y:141};
 assert.ok(canStand(behindTree.x,behindTree.y)&&canStand(inFrontOfTree.x,inFrontOfTree.y));
 assert.ok(hasPortrait('art/foreground.png'));
 canvasImages.length=0;
 drawFigures([{point:inFrontOfTree,look:avatars.Sage,facing:'south'},{point:behindTree,look:avatars.Rowan,facing:'south'}]);
-assert.equal(canvasImages.join(','),'art/rowan-directions.png,art/foreground.png,art/sage-directions.png');
+assert.equal(canvasImages.join(','),'art/foreground.png,art/rowan-directions.png,art/foreground.png,art/sage-directions.png,art/foreground.png');
+for(const id of [0,10]){
+ enter(id);
+ canvasImages.length=0;canvasSprites.length=0;
+ drawFigures([]);
+ const trees=canvasSprites.filter((_,i)=>canvasImages[i]==='art/foreground.png');
+ assert.equal(trees.length,2);
+ for(const [sx,sy,width,height,x,y,scaledWidth,scaledHeight] of trees){
+  assert.deepEqual([sx,sy,width,height,scaledWidth,scaledHeight],[68,0,34,40,68,80]);
+  assert.ok(x>=0&&x+scaledWidth<=720&&y>=0&&y+scaledHeight<=360);
+ }
+}
+enter(10);
+for(const [row,facing] of ['east','west','south','north'].entries()){
+ canvasSprites.length=0;
+ sprite(180,250,avatars.Rowan,false,facing,true);
+ assert.equal(canvasSprites[0].slice(0,4).join(','),[78,row*32,26,32].join(','));
+}
+const gaugeNeedle=fraction=>{
+ const lines=[];
+ scienceLabs.fittings({rect(){},line(...args){lines.push(args)},label(){}}).dial(100,100,fraction);
+ return lines[0];
+};
+assert.ok(gaugeNeedle(0)[2]<100&&gaugeNeedle(1)[2]>100);
+const lampLabels=[];
+const fittings=scienceLabs.fittings({rect(){},line(){},label(text){lampLabels.push(text);}});
+for(const state of ['locked','ready','working','complete'])fittings.lamp(100,100,state);
+assert.deepEqual(lampLabels,['×','○','…','✓']);
+
 
 const inductionLabId=observatory.floors[2].room;
 function runInduction(state,bank,gear,end){

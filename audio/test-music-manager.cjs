@@ -1,17 +1,19 @@
 const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/strict');
 const gain=()=>({value:1,setTargetAtTime(x){this.value=x},setValueAtTime(){},linearRampToValueAtTime(){},cancelScheduledValues(){}});
-const sources=[], cues=[], requests=[], storage=new Map();
+const sources=[], cues=[], noiseVoices=[], requests=[], storage=new Map();
 class Context {
- state='suspended'; currentTime=0; destination={};
+ state='suspended'; currentTime=0; sampleRate=32000; destination={};
  createGain(){return {gain:gain(),connect(){},disconnect(){}}}
  createOscillator(){
   const node={frequency:gain(),connect(){},disconnect(){this.disconnected=true},start(time){this.startTime=time},stop(time){this.stopTime=time}};
   cues.push(node);return node;
  }
  createBufferSource(){
-  const node={connect(){},disconnect(){this.disconnected=true},start(time,offset){this.offset=offset},stop(time){this.stopTime=time}};
-  sources.push(node);return node;
+  const node={connect(){},disconnect(){this.disconnected=true},start(time,offset){this.startTime=time;this.offset=offset;(this.buffer?.noise?noiseVoices:sources).push(this)},stop(time){this.stopTime=time}};
+  return node;
  }
+ createBuffer(_channels,length){return {noise:true,getChannelData:()=>new Float32Array(length)}}
+ createBiquadFilter(){return {frequency:gain(),connect(){},disconnect(){}}}
  resume(){this.state='running';return Promise.resolve()}
  suspend(){this.state='suspended';return Promise.resolve()}
  decodeAudioData(bytes){return Promise.resolve({duration:bytes.duration})}
@@ -38,13 +40,21 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  bg.playDiscoveryCue();assert.equal(cues.length,0);
  bg.unlock();await settle();assert.equal(bg.current.theme,'mechanics_exterior');
  assert.equal(bg.master.gain.value,.1);assert.equal(sources[0].loop,true);assert.equal(sources[0].loopEnd,72);
- bg.playDiscoveryCue();assert.equal(cues[0].stopTime,.21);
+ bg.playDiscoveryCue();assert.equal(cues[0].type,'triangle');
  cues[0].onended();assert.equal(cues[0].disconnected,true);
- bg.playDoorCue();bg.playRepairCue();assert.equal(cues.length,3);
- assert.equal(cues[1].stopTime,.21);assert.equal(cues[2].stopTime,.21);
+ bg.playDoorCue();assert.equal(cues[1].type,'square');
+ bg.playRepairCue();assert.equal(cues.length,6);
+ assert.equal(bg.duck,.52);assert.equal(bg.effects.gain.value,.1);
+ cues[5].onended();assert.equal(bg.duck,1);
  bg.playBlockCue();bg.playPlateCue();
- assert.equal(cues[3].startTime,0);assert.equal(cues[3].stopTime,.21);
- assert.equal(cues[4].startTime,.22);assert.ok(cues[4].startTime>cues[3].stopTime);
+ assert.ok(cues[7].startTime>cues[6].stopTime);
+ bg.playDialCue();bg.playDialCue();assert.equal(cues.length,9);
+ bg.playDialogueCue('Mira');bg.playDialogueCue('Mira');assert.equal(cues.length,10);
+ bg.setDialogueBlips(false);bg.context.currentTime=1;bg.playDialogueCue('Sol');
+ assert.equal(cues.length,10);assert.equal(make().dialogueBlips,false);
+ bg.playHydraulicCue();bg.playHydraulicCue();assert.equal(noiseVoices.length,1);
+ bg.playCouplingCue();assert.equal(cues.length,11);assert.equal(noiseVoices.length,2);
+ noiseVoices[1].onended();assert.equal(noiseVoices[1].disconnected,true);
  const transition=async(theme,time)=>{
   bg.context.currentTime=time;bg.setTheme(theme);await settle();assert.equal(bg.current.theme,theme);
   const old=bg.retiring;assert.equal(old.source.stopTime,time+1.5);
@@ -63,8 +73,8 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(bg.current.theme,'overworld');assert.equal(bg.retiring.theme,'challenge_room');
  const live=bg.current.source;
  bg.setPreferences(25,true);assert.equal(bg.master.gain.value,0);assert.equal(bg.current.source,live);
- bg.playDiscoveryCue();bg.playDoorCue();bg.playRepairCue();bg.playBlockCue();bg.playPlateCue();assert.equal(cues.length,5);
- bg.playObservatoryCue(true);assert.equal(cues.length,5);
+ bg.playDiscoveryCue();bg.playDoorCue();bg.playRepairCue();bg.playBlockCue();bg.playPlateCue();assert.equal(cues.length,11);
+ bg.playObservatoryCue(true);assert.equal(cues.length,11);
  const reloaded=make();assert.equal(reloaded.volume,25);assert.equal(reloaded.muted,true);
  bg.setPreferences(10,false);bg.setDucking(.5);assert.equal(bg.master.gain.value,.05);bg.setDucking();
  bg.retiring.source.onended();bg.setTheme(null);await settle();assert.equal(bg.current,null);
@@ -73,8 +83,8 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  bg.restore();await settle();assert.equal(bg.current.theme,'overworld');
  assert.equal(requests.length,4);
  const cueStart=bg.context.currentTime;
- bg.playObservatoryCue();assert.equal(cues.length,7);
- assert.ok(Math.abs(cues[6].startTime-cueStart-.11)<1e-9);
+ bg.playObservatoryCue();assert.equal(cues.length,13);
+ assert.ok(Math.abs(cues[12].startTime-cueStart-.11)<1e-9);
  await transition(route(24,true),40);
  assert.ok(!bg.pending.has('overworld'));
  await transition(route(25,true),45);

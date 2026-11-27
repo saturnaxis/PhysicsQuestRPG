@@ -29,7 +29,7 @@ async function checkLaunch(scope) {
      cached.set(request.url, offlinePage);
     }
     if (request.url === alias) cached.set(request.url, redirectPage);
-    for (const script of ['observatory.js','field-events.js']) {
+    for (const script of ['observatory.js','field-events.js','exploration.js']) {
      if (request.url === new URL(script, scope).href) {
       cached.set(request.url, {script: fs.readFileSync('docs/'+script,'utf8')});
      }
@@ -54,6 +54,11 @@ async function checkLaunch(scope) {
  await done;
  assert.ok(installed.includes(home));
  assert.ok(!installed.includes(alias));
+ for (const name of ['rowan','sage','mira','sol','vega','tamsin','suri','sana','vela']) {
+  const sprite='art/'+name+'-directions.png';
+  assert.ok(fs.existsSync('docs/'+sprite));
+  assert.ok(installed.includes(new URL(sprite, scope).href), sprite+' is available offline');
+ }
  assert.ok(!installed.includes(audio));
  assert.ok(!installed.includes(new URL('update.html', scope).href));
  listeners.get('message')({data:'activate-update',waitUntil:promise=>{done=promise;}});
@@ -81,6 +86,7 @@ async function checkLaunch(scope) {
  assert.match(offlineObservatory,/function reportEvidence/);
  assert.match(offlineObservatory,/study-followup-/);
  assert.match((await navigate(new URL('field-events.js', scope).href)).script,/function dispatch/);
+ assert.match((await navigate(new URL('exploration.js', scope).href)).script,/function controls/);
  assert.equal(await navigate(home), offlinePage);
  assert.equal(await navigate(home+'?test=observatory'), offlinePage);
  assert.equal(await navigate(alias), offlinePage);

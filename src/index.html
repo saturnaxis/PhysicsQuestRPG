@@ -90,7 +90,7 @@
 </head><body><main><header><div><small>PHYSICS QUEST</small><h1>Mechanics Castle</h1></div><div class="app-tools"><p id="offline-status" role="status" hidden></p><a href="update.html" id="game-update" hidden>Update game</a><button id="touch-mode" type="button">Touch: on</button><button id="screen-mode" type="button" hidden>Fullscreen</button></div></header>
 <section class="stage" aria-label="Mechanics Castle game"><div class="frame"><canvas width="720" height="360" aria-label="Top-down view of the current room"></canvas><div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Game dialogue"></div></div><div class="touch" role="group" aria-label="Touchscreen game controls"><div class="pad" role="group" aria-label="Directional pad"><button data-key="ArrowLeft" aria-label="Left">←</button><button data-key="ArrowUp" aria-label="Up">↑</button><button data-key="ArrowDown" aria-label="Down">↓</button><button data-key="ArrowRight" aria-label="Right">→</button></div><div class="choices controller-actions"><button id="interact" data-touch-label="Select"><kbd>E</kbd> Select</button><button id="card" data-touch-label="Back" hidden><kbd>C</kbd> Back / Card</button><button id="notes" data-touch-label="Notes" hidden><kbd>N</kbd> Research</button><button id="menu" data-touch-label="Menu" hidden><kbd>P</kbd> Menu</button></div></div></div>
 <div class="status" id="status" hidden>
-  <div class="status-copy"><div class="topline"><h2 id="room"></h2><span class="tag" id="floor"></span></div><div class="meter" id="completion" role="progressbar" aria-label="Mechanics Castle completion" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="progress"></span></div><p class="active-action" id="active-action"></p><div class="status-message" id="status-message" tabindex="0"><p class="operator-prompt" id="operator-prompt" aria-live="polite" hidden></p><p id="feedback" aria-live="polite"></p></div><button class="status-expand" id="status-expand" type="button" aria-controls="status-message" aria-expanded="false">More</button></div>
+  <div class="status-copy"><div class="topline"><h2 id="room"></h2><span class="tag" id="floor"></span></div><div class="meter" id="completion" role="progressbar" aria-label="Mechanics Castle completion" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="progress"></span></div><div class="status-line"><span class="active-action" id="active-action"></span><span class="status-separator" aria-hidden="true"> - </span><div class="status-message" id="status-message" tabindex="-1"><p class="operator-prompt" id="operator-prompt" aria-live="polite" hidden></p><p id="feedback" aria-live="polite"></p></div></div><button class="status-expand" id="status-expand" type="button" aria-controls="status-message" aria-expanded="false">More</button></div>
 </div></section>
 </main>
 <script src="audio/music-manager.js"></script>
@@ -103,6 +103,7 @@
 <script src="field-events.js"></script>
 <script src="observatory.js"></script>
 <script src="quest-extras.js"></script>
+<script src="exploration.js"></script>
 <script>
 'use strict';
 const rooms = [
@@ -117,7 +118,7 @@ const rooms = [
 const canvas=document.querySelector('canvas'), ctx=canvas.getContext('2d');
 const $=id=>document.getElementById(id);
 const keys=new Set();
-const avatars={Rowan:{coat:'#b35f35',hair:'#43251d',line:'I’ll find where the fault started.'},Sage:{coat:'#3e9b98',hair:'#372447',line:'Let’s see what the readings tell us.'}};
+const avatars={Rowan:{sprite:'rowan',coat:'#b35f35',hair:'#43251d',line:'I’ll find where the fault started.'},Sage:{sprite:'sage',coat:'#3e9b98',hair:'#372447',line:'Let’s see what the readings tell us.'}};
 const consolePoint={x:360,y:260}, exit={x:650,y:178};
 let avatar='', roomIndex=0, player={x:80,y:245,facing:'south',walking:false}, acquired=new Set();
 let passed=false, busy=false, previous=0, time=0, animation=null, finished=false, uiZone='', attemptId=0;
@@ -125,8 +126,14 @@ const room=()=>rooms[roomIndex];
 let choosing=false, choiceIndex=0, onTitle=true, sessionId=0;
 let roomTransition=null, roomEntry=null;
 let speech=null, repairFlash=null, observatoryRepair=null;
+const activeOverlays=new Set();
 const motionPreference=window.matchMedia?.('(prefers-reduced-motion: reduce)');
 const reducedMotion=()=>Boolean(motionPreference?.matches);
+const guardianTimingKey='physics-quest-relaxed-guardian-v1';
+let relaxedGuardianTiming=false;
+try{relaxedGuardianTiming=localStorage.getItem(guardianTimingKey)==='on';}catch{}
+let guardianShift=null;
+
 const gameMode=()=>adventure.state({onTitle,modal:!$('modal').hidden,choosing,busy,avatar,transitioning:Boolean(roomTransition)});
 function canMove(){return gameMode()==='exploration';}
 function canSelect(){return ['overlay','apparatus'].includes(gameMode());}
@@ -134,7 +141,9 @@ function selectDirection(direction){
  if(observatory.moveStudyProbe(direction))return;
  const lab=currentLab();
  if(lab?.adjust&&choosing&&$('modal').hidden){
+  const before=lab.values[lab.adjust];
   scienceLabs.adjust(lab,['ArrowLeft','ArrowDown'].includes(direction)?-1:1);
+  if(lab.values[lab.adjust]!==before)music.playDialCue();
   say(dialInstructions(lab));
   saveProgress();renderActions();return;
  }
@@ -191,7 +200,10 @@ function cancelChoice(){
 const close=()=>{speech=null;$('sheet').classList.remove('vista','research-sheet','robot-story','speaker-sheet','field-sheet','relay-sheet','curiosity-sheet','study-sheet');$('modal').hidden=true;keys.clear();syncUtilityButtons();$('interact').focus({preventScroll:true});};
 function showRoomMessages(expanded){
  const button=$('status-expand');
- $('status-message').classList.toggle('expanded',expanded);
+ const message=$('status-message');
+ message.classList.toggle('expanded',expanded);
+ message.tabIndex=expanded?0:-1;
+ if(!expanded)message.scrollTop=0;
  button.setAttribute('aria-expanded',String(expanded));
  button.textContent=expanded?'Less':'More';
 }
@@ -215,7 +227,7 @@ function showSpeech(name,message,mood,actions,{focus=true}={}){
   '<span class="speech-reserve" aria-hidden="true">'+message+'</span>'+
   '<span id="speech-text" aria-hidden="true"></span></p><small class="speech-hint" id="speech-hint"></small></div></div>'+actions,{focus:false});
  $('sheet').classList.add('speaker-sheet');
- speech={text:message,start:performance.now(),count:0,complete:false};
+ speech={voice:name,text:message,start:performance.now(),count:0,complete:false};
  if(reducedMotion())revealSpeech();
  else{advanceSpeech(speech.start);syncUtilityButtons();}
  if(focus)setChoice(0);
@@ -239,6 +251,7 @@ function advanceSpeech(now){
  if(count===speech.text.length){revealSpeech();return;}
  if(count!==speech.count){
   $('speech-text').textContent=speech.text.slice(0,count);
+  if(/\p{L}|\p{N}/u.test(speech.text.slice(speech.count,count)))music.playDialogueCue(speech.voice);
   speech.count=count;
  }
 }
@@ -251,11 +264,13 @@ function openMusicSettings(back){
  function refresh(){
   $('music-level').textContent='Music volume · '+music.volume+'%'+(music.muted?' · Muted':'');
   mute.textContent=music.muted?'Unmute':'Mute';
+  blips.textContent='Dialogue sounds: '+(music.dialogueBlips?'On':'Off');
  }
  function adjust(step){music.setPreferences(music.volume+step,music.muted);refresh();}
  button($('music-buttons'),'Volume −5%',()=>adjust(-5));
  button($('music-buttons'),'Volume +5%',()=>adjust(5));
  const mute=button($('music-buttons'),'Mute',()=>{music.setPreferences(music.volume,!music.muted);refresh();});
+ const blips=button($('music-buttons'),'Dialogue sounds',()=>{music.setDialogueBlips(!music.dialogueBlips);refresh();});
  $('dismiss').onclick=back;
  refresh();
  setChoice(0);
@@ -264,7 +279,10 @@ function say(text=$('feedback').textContent){
  const feedback=$('feedback'), prompt=$('operator-prompt');
  const message=text.trim();
  feedback.hidden=!message||(!prompt.hidden&&message===prompt.textContent.trim());
- if(feedback.textContent!==text)feedback.textContent=text;
+ if(feedback.textContent!==text){
+  feedback.textContent=text;
+  $('status-message').scrollTop=0;
+ }
 }
 function intro(){
  music.setTheme(null);
@@ -293,13 +311,14 @@ function showNotebook(section='objectives',selectedCard){
  const tabs=[['objectives','Objectives'],['discoveries','Discoveries'],['equipment','Equipment']];
  if(arrived)tabs.push(['observations','Observatory readings']);
  if(observatoryState.archived)tabs.push(['archive','Field report']);
+ tabs.push(['exploration','Exploration']);
  const checkLine=(done,name,stage='Pending')=>'<li class="'+(done?'done':'')+'">'+name+' · '+(done?'Complete':stage)+'</li>';
  let page='';
  if(section==='objectives'){
-  const checks=planOwners.filter(id=>id<6).map(id=>checkLine(reported.has(id),operators[id][4],solved.has(id)?'Report to '+operators[id][0]:'Pending')).join('');
+  const checks=planOwners.filter(id=>id<6).map(id=>checkLine(reported.has(id),operators[id][4],solved.has(id)?repairNext(id):'Pending')).join('');
   const route=surveyRead?'Survey recorded. Take the ridge road east to the dome. The service gate opens from Sandstone Pass.':'The survey marker is across the East Garden drawbridge.';
   const summary='<h3>Current objective</h3><p>'+objective()+'</p>';
-  const castle='<h3>Mechanics Castle</h3><p>'+confirmedCount()+'/6 safety checks confirmed</p><ul class="journal-checks">'+checks+checkLine(finished,'Flywheel Guardian restart',reported.has(6)?'Read the diagnostics':solved.has(6)?'Report to '+operators[6][0]:'Pending')+'</ul><h3>Valley route</h3><ul class="journal-checks">'+checkLine(surveyRead,'East Garden survey','Optional')+checkLine(arrived,'E&amp;M Observatory entrance',finished?'Follow the ridge road east':'Unlock by restoring the Guardian')+'</ul><p>'+route+'</p>';
+  const castle='<h3>Mechanics Castle</h3><p>'+confirmedCount()+'/6 safety checks confirmed</p><ul class="journal-checks">'+checks+checkLine(finished,'Flywheel Guardian restart',reported.has(6)?'Read the diagnostics':solved.has(6)?repairNext(6):'Pending')+'</ul><h3>Valley route</h3><ul class="journal-checks">'+checkLine(surveyRead,'East Garden survey','Optional')+checkLine(arrived,'E&amp;M Observatory entrance',finished?'Follow the ridge road east':'Unlock by restoring the Guardian')+'</ul><p>'+route+'</p>';
   const inObservatory=observatory.inside(roomIndex);
   page=summary+(inObservatory?'':castle);
   if(arrived){
@@ -326,6 +345,19 @@ function showNotebook(section='objectives',selectedCard){
   page=observatory.observationsHTML(observatoryState,observatory.floorFor(roomIndex)?.index);
  }else if(section==='archive'){
   page=nacreReport();
+ }else if(section==='exploration'){
+  const badges=explorationBadges();
+  const rewards=exploration.rewards(badges);
+  const badgeList=badges.field.map(([name,earned])=>checkLine(earned,name,'Undiscovered')).join('')+
+   badges.curiosities.map(name=>checkLine(true,name)).join('');
+  const perk=(id,name,description,requirement)=>'<p><strong>'+name+'</strong><br>'+
+   (rewards[id]?description+' <button id="reward-'+id+'">'+(explorationState[id]?'Disable':'Enable')+' '+name+'</button>':requirement)+'</p>';
+  page='<h3>Calibration Badges</h3><ul class="journal-checks">'+badgeList+'</ul>'+
+   '<p>Inspect curiosities to earn more badges. Look for the Calibration Shed on the east side of the garden.</p>'+
+   '<h3>Field rewards</h3>'+
+   perk('boots','Sprint Boots','Walk 20% faster on the valley trails.','Earn two field badges to unlock.')+
+   perk('goggles','Vector Goggles','Show available tool overlays as you explore.','Inspect two curiosities to unlock.')+
+   '<h3>Stargate coordinates</h3><p>'+(rewards.clue?exploration.clue:'Earn five badges to decipher the optional relay coordinates.')+'</p>';
  }else if(section==='discoveries'){
   page=(curiosities.size?'<h3>Curiosities</h3>'+questExtras.list(curiosities):'')+'<h3>Discovery cards · '+recovered.size+'/'+planOwners.length+'</h3><div class="journal-list" id="journal-cards"></div>'+
    (recovered.size?'':'<p>Inspect a drafting table, book, or computer in a research room to collect a card.</p>');
@@ -346,6 +378,15 @@ function showNotebook(section='objectives',selectedCard){
  for(const [id] of tabs)$('journal-'+id).onclick=()=>showNotebook(id);
  $('map').onclick=mapView;
  $('dismiss').onclick=close;
+ if(section==='exploration')for(const id of ['boots','goggles']){
+  const control=$('reward-'+id);
+  if(control)control.onclick=()=>{
+   explorationState[id]=!explorationState[id];
+   saveProgress();
+   showNotebook('exploration');
+   setChoice(menuButtons().indexOf($('reward-'+id)));
+  };
+ }
  if(section==='discoveries'){
   const cards=planOwners.filter(id=>recovered.has(id));
   for(const id of cards)button($('journal-cards'),plans[id].title,()=>openPlan(id,false,undefined,()=>showNotebook('discoveries',id)));
@@ -361,14 +402,50 @@ function ending(){
 }
 
 $('interact').onclick=confirmChoice;$('notes').onclick=useResearchTool;$('card').onclick=()=>usingPadLabels?goBack():cancelChoice();
+function explorationBadges(){
+ return exploration.badges(surveyRead,fieldReports,explorationState.complete,questExtras.names(curiosities));
+}
+function valleySpeed(){
+ if(roomIndex<10||roomIndex>15||!explorationState.boots)return 1;
+ const {field}=explorationBadges();
+ return field.filter(([,earned])=>earned).length>=2?1.2:1;
+}
+function gogglesOverlay(index){
+ if(!explorationState.goggles||curiosities.size<2)return false;
+ if(index===observatory.floors[3].room)return observatory.trialState(index,observatoryState)?.coil.compass===true;
+ return Boolean(scienceLabs.overlayName(index)&&acquired.has(scienceLabs.instrumentByRoom[index]));
+}
+function overlayIsOn(index){
+ return activeOverlays.has(index)||gogglesOverlay(index)&&!explorationState.hidden.includes(index);
+}
+function toggleOverlay(index){
+ const show=!overlayIsOn(index);
+ activeOverlays.delete(index);
+ explorationState.hidden=explorationState.hidden.filter(id=>id!==index);
+ if(show&&!gogglesOverlay(index))activeOverlays.add(index);
+ if(!show&&gogglesOverlay(index))explorationState.hidden.push(index);
+ saveProgress();
+}
+function showCompassTool(){
+ const state=observatory.trialState(roomIndex,observatoryState);
+ const index=roomIndex;
+ observatory.panel('Portable compass','The overlay shows the modeled field direction near the coil axis. Use the docks to record a heading.',
+  [[overlayIsOn(index)?'Hide compass overlay':'Show compass overlay',()=>{toggleOverlay(index);close();}],
+   ['Open notebook',()=>showNotebook('observations')]],close,'Back to the room',
+  '<p class="instrument-reading">Coil current '+(state.coil.polarity>0?'A · eastward on axis':'B · westward on axis')+'.</p>');
+ $('observatory-choices').children[0].id='toggle-tool-overlay';
+}
 function researchAction(target){
- if(target?.kind==='plan')return {label:'Read plan',run:()=>openPlan(room().planOwner,true,nearbySource())};
+ if(target?.kind==='plan')return {label:planActionLabel(room().planOwner),run:inspectResearch};
  if(observatory.inside(roomIndex)){
   const instrument=target?.kind==='observatory-station'&&observatory.instrument(roomIndex,target.control.id,observatoryState);
   if(instrument){
    const run=instrument.measure?()=>observatoryStation(target.control.id):
     ()=>observatory.panel(instrument.title,instrument.text,[['Open notebook',()=>showNotebook('observations')]]);
    return {label:'Read instrument',run};
+  }
+  if(roomIndex===observatory.floors[3].room&&observatory.trialState(roomIndex,observatoryState).coil.compass){
+   return {label:'Portable compass',run:showCompassTool};
   }
   const section=roomIndex===observatory.offworld&&observatoryState.archived?'archive':
    observatoryState.observations.some(rows=>rows.length)?'observations':'objectives';
@@ -383,7 +460,13 @@ function researchAction(target){
  return {label:'Field Notebook',run:notebook};
 }
 function useResearchTool(){
- if(canMove())researchAction(activeInteraction()).run();
+ if(canMove()){researchAction(activeInteraction()).run();return;}
+ if(!$('modal').hidden){
+  $('sheet').querySelector('#toggle-tool-overlay')?.click();
+  return;
+ }
+ const lab=currentLab();
+ if(choosing&&lab?.adjust&&recovered.has(roomIndex)&&scienceLabs.overlayName(roomIndex))toggleOverlay(roomIndex);
 }
 function takeReading(lab,control){
  const instrument=scienceLabs.instrumentByRoom[lab.room];
@@ -392,8 +475,11 @@ function takeReading(lab,control){
  const lines=scienceLabs.measurements(lab,control);
  const message=first?'Reading recorded in the Field Notebook.':'';
  const next=()=>{close();say(labDone()?objective():scienceLabs.goal(lab));};
- dialog('<h2>'+instrument+'</h2><p>'+rooms[lab.room].name+'</p><ul class="instrument-reading">'+lines.map(line=>'<li>'+line+'</li>').join('')+'</ul>'+(message?'<p class="muted">'+message+'</p>':'')+'<div class="choices"><button id="dismiss" class="gold">Back to the room</button><button id="reading-journal">Field Notebook</button></div>');
+ const overlay=scienceLabs.overlayName(lab.room);
+ const toggle=overlay?'<button id="toggle-tool-overlay">'+(overlayIsOn(lab.room)?'Hide ':'Show ')+overlay.toLowerCase()+'</button>':'';
+ dialog('<h2>'+instrument+'</h2><p>'+rooms[lab.room].name+'</p><ul class="instrument-reading">'+lines.map(line=>'<li>'+line+'</li>').join('')+'</ul>'+(message?'<p class="muted">'+message+'</p>':'')+'<div class="choices"><button id="dismiss" class="gold">Back to the room</button><button id="reading-journal">Field Notebook</button>'+toggle+'</div>');
  $('dismiss').onclick=next;
+ if(overlay)$('toggle-tool-overlay').onclick=()=>{toggleOverlay(lab.room);next();};
  $('reading-journal').onclick=()=>showNotebook('equipment');
 }
 function goBack(){
@@ -407,6 +493,7 @@ const bindings={w:'ArrowUp',a:'ArrowLeft',s:'ArrowDown',d:'ArrowRight'};
 window.addEventListener('keydown',e=>{
  const key=e.key.toLowerCase();
  const direction=bindings[key]||e.key;
+ if(e.target===$('status-message')&&e.key.startsWith('Arrow')&&e.target.scrollHeight>e.target.clientHeight)return;
  if(direction.startsWith('Arrow')||inputActions[key]||['Enter',' '].includes(e.key))setInputMode('keyboard');
  if(direction.startsWith('Arrow')){
   e.preventDefault();
@@ -435,7 +522,10 @@ document.querySelectorAll('[data-key]').forEach(el=>{
 const loadArt=name=>{const asset=new Image();asset.src='art/'+name;return asset;};
 const roomImages=Array.from({length:24},(_,i)=>loadArt('room-'+i+'.webp'));
 const foregroundArt=loadArt('foreground.png');
-const personImages=Object.fromEntries([['#b35f35','rowan'],['#3e9b98','sage'],['#9b759a','mira'],['#817eaa','inez'],['#bf9360','teo']].map(([tone,name])=>[tone,loadArt(name+'-directions.png')]));
+const meadowGroundArt=loadArt('meadow-ground.webp');
+const characterSheets=Object.fromEntries(['rowan','sage','mira','sol','vega','tamsin','suri','sana','vela']
+ .map(name=>[name,loadArt(name+'-directions.png')]));
+const personImages=Object.fromEntries([['#817eaa','inez'],['#bf9360','teo']].map(([tone,name])=>[tone,loadArt(name+'-directions.png')]));
 const vehicleImages={cart:loadArt('cart.png'),receiver:loadArt('receiver.png'),guardian:loadArt('guardian.png')};
 const rect=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),w,h);};
 function label(text,x,y,color='#f4ead0',size=14){
@@ -444,59 +534,16 @@ function label(text,x,y,color='#f4ead0',size=14){
 function line(x,y,x2,y2,color,width=3){
  ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x2,y2);ctx.stroke();
 }
-const observatorySpriteDesigns={
- Vega:{skin:'#b9754d',trim:'#d6ac68',item:'lens'},
- Tamsin:{skin:'#e2b68f',trim:'#d6a66b',item:'apron'},
- Suri:{skin:'#bf835d',trim:'#e0ab76',item:'coil'},
- Sana:{skin:'#946147',trim:'#c6b79b',item:'compass'},
- Vela:{skin:'#d0b0c4',trim:'#e9ce99',item:'star'}
-};
-function observatorySprite(x,y,look,{skin,trim,item},facing){
- const dark='#222532';
- const side=facing==='east'?1:facing==='west'?-1:0;
- const back=facing==='north';
- rect(x-14,y+8,28,6,'#13223198');
- rect(x-10,y-4,20,14,dark);rect(x-8,y-5,16,13,look.coat);
- rect(x-7,y+9,5,5,dark);rect(x+2,y+9,5,5,dark);
- rect(x-9,y-18,18,14,dark);rect(x-7,y-20,14,12,look.hair);
- if(back){rect(x-8,y-17,16,13,look.hair);}
- else{
-  rect(x-6+side*2,y-14,12,10,skin);
-  rect(x-7,y-16,14,3,look.hair);
-  rect(x+2+side*2,y-10,2,2,dark);
-  if(!side)rect(x-4,y-10,2,2,dark);
+function sprite(x,y,look,walking=false,facing='east',carrying=false){
+ const name=look.sprite||look.name?.split(' ').at(-1).toLowerCase();
+ const sheet=Object.hasOwn(characterSheets,name)?characterSheets[name]:null;
+ if(sheet?.complete&&sheet.naturalWidth){
+  const row=['east','west','south','north'].indexOf(facing);
+  const step=walking?[0,1,0,2][Math.floor(time*9)%4]:0;
+  const column=step+(carrying?3:0);
+  ctx.drawImage(sheet,column*26,row*32,26,32,x-17,y-27,34,42);
+  return;
  }
- rect(x-8,y-4,16,2,trim);rect(x-3,y+1,6,2,trim);
- if(item==='lens'){
-  rect(x-9,y-17,18,3,'#98704c');
-  const lens=x+(side||1)*5;
-  rect(lens-3,y-21,7,7,'#72573e');rect(lens-2,y-20,5,5,trim);
-  rect(lens,y-19,2,2,back?'#a78962':'#c3dee0');
-  if(!back)rect(x-side*3-7,y-9,2,4,trim);
-  rect(x-6,y+1,2,6,'#ae865f');rect(x+4,y+1,2,6,'#ae865f');
- }
- if(item==='apron'){rect(x-5,y+1,10,7,'#936743');rect(x-5,y-13,3,1,trim);rect(x+2,y-13,3,1,trim);}
- if(item==='coil'){for(const offset of [-4,0,4])rect(x+offset,y+1,2,5,trim);}
- if(item==='compass'){rect(x-3,y-23,6,4,look.hair);rect(x-2,y+1,4,4,trim);}
- if(item==='star'){
-  const hair='#34394f',pale='#665e78';
-  rect(x-9,y-18,17,3,hair);
-  rect(x-10,y-15,3,17,hair);rect(x-10,y-16,2,6,pale);
-  if(back||side<0)rect(x+6,y-15,5,17,hair);
-  if(back){
-   rect(x-7,y-16,14,13,hair);rect(x-5,y-12,2,13,pale);
-   rect(x-6,y-17,12,2,'#d7c6a5');
-  }else{
-   rect(x-8+side*2,y-16,6,3,'#d7c6a5');
-   rect(x+(side||1)*8-2,y-12,5,2,skin);
-   rect(x+(side||1)*8-1,y-9,2,3,trim);
-  }
-  rect(x-1,y-1,2,7,trim);rect(x-3,y+2,6,2,trim);
- }
-}
-function sprite(x,y,look,walking=false,facing='east'){
- const design=observatorySpriteDesigns[look.name?.split(' ').at(-1)];
- if(design){observatorySprite(x,y,look,design,facing);return;}
  const img=personImages[look.coat];
  if(img?.complete&&img.naturalWidth){
   const step=walking?Math.floor(time*7)%2+1:0;
@@ -558,9 +605,13 @@ function liftArt(a,p,lab){
  if(!solved.has(0))sprite(273,platform-10,miraLook);
 }
 
+function labArtState(index,complete){
+ return complete?'complete':busy?'working':labAccessMessage(index)?'locked':'ready';
+}
 function equipment(){
  const lab=currentLab();
- if(lab&&[1,2,3,4].includes(lab.room)){scienceLabs.draw(lab,time,{rect,line,label},labDone());return;}
+ const state=labArtState(roomIndex,labDone());
+ if(lab&&[1,2,3,4].includes(lab.room)){scienceLabs.draw(lab,time,{rect,line,label},labDone(),state);return;}
  const a=animation,p=a?Math.min(1,(time-a.start)/.95):0;
  const gold='#f0cb78', steel='#849b8b', dark='#273833';
  const kind=room().kind;
@@ -577,18 +628,32 @@ function equipment(){
  }else{
   line(135,156,586,156,steel,6);
   const direction=lab.heading;
-  const phase=(time%2)/2;
-  const gx=a?(direction>0?245:475)+direction*(a.win?96:156)*p:passed?360:360+direction*(phase*150-75);
+  const cycle=guardianCycle(lab);
+  const rhythm=reducedMotion()?0.5:cycle.position;
+  const gx=a?(direction>0?245:475)+direction*(a.win?96:156)*p:passed?360:360+direction*(rhythm*150-75);
   const cx=a?(a.side>0?135:585)+(gx-(a.side>0?135:585))*Math.min(1,p*1.22):135;
-  cart(cx,155,gold,a?.index===1?42:31);
-  guardianArt(gx,158,finished);
-  label(finished?'GUARDIAN ONLINE':passed?'BRAKE LOCKED':'FAULT MODE  '+(direction>0?'→':'←'),360,83);
-  if(!passed)label('Brake '+lab.brakes+'/2',360,189);
+  cart(cx,155,gold,(a?.index??lab.cartIndex)===1?42:31);
+  const shifting=guardianShift===null||reducedMotion()?1:Math.min(1,time-guardianShift);
+  guardianArt(gx,158,finished,lab.brakes>0,shifting);
+  const momentum=scienceLabs.guardianMomentum(direction,lab.brakes);
+  label(finished?'GUARDIAN ONLINE':passed?'BRAKE LOCKED':
+   'PHASE '+(lab.brakes+1)+'  ·  '+Math.abs(momentum)+' kg·m/s '+(direction>0?'→':'←'),360,90);
+  if(!passed){
+   const cue=busy?'RUNNING':cycle.open?'LAUNCH':'WAIT';
+   const tint=cycle.open?'#b6e0ac':'#e7bc8f';
+   rect(309,169,102,23,'#202e30');
+   label(cue,360,184,tint,12);
+   rect(310,192,100,3,'#685a47');
+   if(!reducedMotion()&&!relaxedGuardianTiming){
+    rect(330,192,56,3,'#84ab83');
+    rect(310+Math.round(rhythm*97),190,3,7,'#fff1cc');
+   }
+  }
   for(const i of [0,1,2,3,4,5]){
    rect(128+i*15,83,9,8,'#977160');rect(129+i*15,84,7,5,reported.has(i)?'#a4dba3':'#603a31');
   }
  }
- if(lab&&!labDone())scienceLabs.draw(lab,time,{rect,line,label});
+ if(lab)scienceLabs.draw(lab,time,{rect,line,label},labDone(),state);
 }
 function hydraulicArt(attempt,p,lab){
  const pressure=(attempt?.pressure??lab.values.hydraulic)+' kPa';
@@ -618,8 +683,8 @@ function hydraulicArt(attempt,p,lab){
   }
  }
 }
-function guardianArt(x,y,healthy){
- const metal=healthy?'#a0a98d':'#ab7156';
+function guardianArt(x,y,healthy,shifted=false,shifting=1){
+ const metal=healthy?'#a0a98d':shifted?'#668e91':'#ab7156';
  rect(x-32,y-31,64,29,'#303739');rect(x-28,y-34,56,27,metal);
  for(const side of [-1,1]){
   rect(x+side*25-9,y-43,17,22,'#806349');
@@ -629,9 +694,15 @@ function guardianArt(x,y,healthy){
  rect(x-7,y-52,4,5,healthy?'#a1edad':'#f29362');rect(x+3,y-52,4,5,healthy?'#a1edad':'#f29362');
  ctx.fillStyle='#3b4545';ctx.beginPath();ctx.arc(x,y-20,13,0,Math.PI*2);ctx.fill();
  ctx.strokeStyle='#d0b578';ctx.lineWidth=3;ctx.stroke();
- const phase=passed?0:time*11;
+ if(!shifted||shifting<1){
+  const drift=shifted?Math.max(0,shifting):0;
+  ctx.save();ctx.globalAlpha=1-drift;ctx.strokeStyle='#dfbb77';
+  ctx.beginPath();ctx.arc(x+30*drift,y-20-22*drift,17,0,Math.PI*2);ctx.stroke();
+  ctx.restore();
+ }
+ const phase=passed||reducedMotion()?0:time*(shifted?7:11);
  for(let i=0;i<3;i++){const a=phase+i*Math.PI*2/3;line(x,y-20,x+Math.cos(a)*9,y-20+Math.sin(a)*9,'#e3c296',2);}
- if(!passed&&Math.sin(time*16)>.7){line(x-37,y-34,x-45,y-40,'#f5ad70',2);line(x+41,y-32,x+47,y-39,'#de8a62',2);}
+ if(!passed&&!reducedMotion()&&Math.sin(time*16)>.7){line(x-37,y-34,x-45,y-40,'#f5ad70',2);line(x+41,y-32,x+47,y-39,'#de8a62',2);}
 }
 const rectangle=(x,y,a,b,c,d)=>x>a&&x<b&&y>c&&y<d;
 function furnitureCollision(x,y){
@@ -643,7 +714,7 @@ function furnitureCollision(x,y){
   const reset=scienceLabs.resetConsole(lab.room);
   if(rectangle(x,y,reset.x-reset.width/2,reset.x+reset.width/2,reset.y-reset.height/2,reset.y+reset.height/2))return true;
  }
- if(roomIndex>=9&&roomIndex<16)return false;
+ if(roomIndex===0||(roomIndex>=9&&roomIndex<16))return false;
  if(!lab&&room().kind&&rectangle(x,y,342,380,246,257))return true;
  if([35,85,143,197,265,325].some(tx=>rectangle(x,y,tx*2-13,tx*2+47,61,69)))return true;
  if([3,5,6,8].includes(roomIndex)&&[31,320].some(tx=>rectangle(x,y,tx*2,tx*2+36,266,289)))return true;
@@ -656,12 +727,13 @@ function furnitureCollision(x,y){
 }
 
 function blocks(x,y){
+ if(roomIndex===calibrationRoom)return exploration.blocks(explorationState,x,y);
  if(observatory.inside(roomIndex))return observatory.blocks(roomIndex,x,y,observatoryState);
  if(furnitureCollision(x,y))return true;
  if(treeCollision(roomIndex,x,y))return true;
  const station=valleyInvestigations.stations[roomIndex];
  if(station&&rectangle(x,y,station.x-30,station.x+30,station.y-19,station.y-4))return true;
- if(roomIndex===11)return x>326&&x<392&&(y<231||y>258);
+ if(roomIndex===11)return x>326&&x<392&&(y<225||y>266);
  if(roomIndex===9&&y>87&&y<178&&(!gardenBridge||x<399||x>440))return true;
  if(roomIndex===13&&x>=485&&x<=599&&y<=166)return true;
  if(roomIndex===14&&x>=501&&x<=590&&y>=96&&y<=170)return true;
@@ -679,6 +751,7 @@ function setInputMode(input){
  if(lastInput===input)return;
  lastInput=input;
  usingPadLabels=input==='gamepad';
+ if(input==='gamepad')window.dispatchEvent(new Event('physicsquest-gamepad-input'));
  for(const [id,key,padKey] of controllerLabels){
   const cap=$(id).querySelector('kbd');
   if(cap)cap.textContent=usingPadLabels?padKey:key;
@@ -734,11 +807,21 @@ function movementDirection(){
 }
 function frame(now){
  time=now/1000;
+ const trial=busy&&roomIndex===3?currentLab()?.trial:null;
+ if(trial?.key==='momentum'&&!trial.impactPlayed&&time-trial.started>=trial.approachTime){
+  trial.impactPlayed=true;
+  music.playCouplingCue();
+ }
  const dt=Math.min(.04,(now-previous)/1000);
  previous=now;
  player.walking=false;
  if(canMove()){
-  adventure.move(player,movementDirection(),184*dt,canStand);
+  adventure.move(player,movementDirection(),184*valleySpeed()*dt,canStand);
+  if(roomIndex===calibrationRoom){
+   const wasComplete=explorationState.complete;
+   const reading=exploration.update(explorationState,player,dt,reducedMotion());
+   if(reading)calibrationFeedback(reading,wasComplete);
+  }
   const trial=observatory.updateTrial(roomIndex,dt,observatoryState);
   if(trial)finishObservatoryAction(trial,trial.index);
   const target=activeInteraction();
@@ -761,17 +844,13 @@ rooms.push(
 );
 const labSessions=new Map(), fieldReports=new Map(), curiosities=new Set();
 let observatoryState=observatory.fresh();
+let explorationState=exploration.fresh();
 function currentLab(){
  if(!scienceLabs.title[roomIndex])return null;
  if(!labSessions.has(roomIndex))labSessions.set(roomIndex,scienceLabs.make(roomIndex,roomIndex===9?gardenBridge:solved.has(roomIndex),time));
  return labSessions.get(roomIndex);
 }
 function labDone(){return roomIndex===9?gardenBridge:passed;}
-function labReady(){
- if(!consulted.has(roomIndex)){say(operatorPrompt());return false;}
- if(!recovered.has(roomIndex)){say(findPlan(roomIndex));return false;}
- return true;
-}
 function mountCounterweight(lab,control){
  if(control.id.startsWith('weight-')){
   if(lab.carry){say('Hang the load you are holding or use Back to return it.');return;}
@@ -796,38 +875,74 @@ function testLift(lab){
  const message=lab.load+' N versus 520 N, a difference of '+Math.abs(difference)+' N. '+(win?'The counterweight descends and the lift rises.':'The platform is heavier, so it does not rise.');
  performTrial(lab,'lift',win,message,1.1,{onWin:walkMira});
 }
+function guardianCycle(lab){
+ return scienceLabs.guardianCycle(time,lab.brakes,relaxedGuardianTiming||reducedMotion());
+}
 function testBrake(lab,side){
  if(lab.cartIndex===null){say('Couple one of the marked carts before using a launcher.');return;}
- const {cart,guardian,total}=scienceLabs.brakeMomenta(lab.cartIndex,side,lab.heading);
+ if(!guardianCycle(lab).open){
+  say('Launch window missed. The launcher reset. Try again when the gate reads LAUNCH, or enable relaxed timing in the Menu.');
+  return;
+ }
+ const {cart,guardian,total}=scienceLabs.brakeMomenta(lab.cartIndex,side,lab.heading,lab.brakes);
  const stopped=total===0, win=stopped&&lab.brakes===1;
  animation={start:time,side,win:stopped,index:lab.cartIndex};
  const signed=value=>value>0?'+'+value:value<0?'−'+Math.abs(value):'0';
  const nextHeading=-lab.heading;
  const message=win?'Net momentum is zero on both passes. The brake locks.':
-  stopped?'The first pass stops. The guardian now travels '+(nextHeading>0?'right':'left')+'. Use the opposite launcher for the return pass.':
+  stopped?'Brake 1 locked. The Guardian shifted gears and reversed. It now carries '+signed(scienceLabs.guardianMomentum(nextHeading,1))+' kg·m/s. Match the new reading before launching.':
   'The pair is still moving '+(total>0?'right':'left')+'. The brake cannot catch.';
  const reading='Cart '+signed(cart)+', guardian '+signed(guardian)+', total '+signed(total)+' kg·m/s (right is positive). ';
  performTrial(lab,'brake',win,reading+message,.98,{
-  accepted:stopped,
+  failed:!stopped,
   onSettle(){
    animation=null;
    if(stopped){
     lab.brakes++;
-    if(!win)lab.heading=nextHeading;
+    if(!win){lab.heading=nextHeading;guardianShift=time;}
    }
   }
  });
 }
 
+function researchRoute(index){
+ const {name,dir}=plans[index];
+ return 'Research in the '+name+' through the '+dir+' door.';
+}
+function labAccessMessage(index){
+ if(!consulted.has(index))return 'Talk to '+operators[index][0]+' to start the experiment.';
+ if(!recovered.has(index)&&researchRequired.has(index)){
+  return 'Trial failed. '+researchRoute(index);
+ }
+ return '';
+}
+function labControlBlock(lab,control){
+ const blocked=labAccessMessage(lab.room);
+ if(blocked)return blocked;
+ if(control.id==='force'&&!lab.calibrated){
+  const hint='The force dial unlocks after you calibrate the test mass.';
+  return recovered.has(lab.room)?hint+' Use the plan to choose a mass.':researchRoute(lab.room)+' '+hint;
+ }
+ return '';
+}
+function requireResearchAfterFailure(index){
+ if(!recovered.has(index)){
+  researchRequired.add(index);
+  saveProgress();
+ }
+}
 function useLabControl(control){
  const lab=currentLab();
- if(!lab||busy||labDone()||!labReady())return;
- if(control.id!=='reset'&&readingRequired(roomIndex)){takeReading(lab,control);return;}
+ if(!lab||busy||labDone())return;
+ const blocked=labControlBlock(lab,control);
+ if(blocked){say(blocked);renderActions();return;}
  if(control.id==='reset'){
-  labSessions.set(roomIndex,scienceLabs.make(roomIndex));
+  const reset=scienceLabs.make(roomIndex);
+  if(roomIndex===6&&lab.brakes===1)Object.assign(reset,{brakes:1,heading:lab.heading});
+  labSessions.set(roomIndex,reset);
   attempts.delete(roomIndex);
   animation=null;
-  say('Experiment reset. '+labTask(currentLab()));
+  say((reset.brakes===1?'Launchers reset. Phase 2 checkpoint retained. ':'Experiment reset. ')+scienceLabs.goal(reset));
  }else if(control.id.startsWith('weight-')||control.id==='lift-hook'){
   mountCounterweight(lab,control);
  }else if(control.id==='lift-lever'){
@@ -841,6 +956,7 @@ function useLabControl(control){
  }else if(control.id.startsWith('cart-')){
   lab.cartIndex=control.detail;
   const cart=scienceLabs.equipment.carts[lab.cartIndex];
+  music.playCouplingCue();
   say('Coupled '+cart.mass+' kg cart · '+cart.mass*cart.speed+' kg·m/s. Walk to a launcher.');
  }else if(control.id.startsWith('launcher-')){
   testBrake(lab,control.detail);
@@ -858,11 +974,6 @@ function useLabControl(control){
  }
  if(!busy)saveProgress();
  renderActions();
-}
-function labTask(lab){
- return readingRequired(lab.room)
-  ?'Use the '+scienceLabs.instrumentByRoom[lab.room].toLowerCase()+' at the apparatus to record a reading before testing.'
-  :scienceLabs.goal(lab);
 }
 function dialInstructions(lab){
  const instruction='Use directions to adjust. Interact to test or Back to walk.';
@@ -888,6 +999,7 @@ function handleLabMass(lab,control){
  const win=Math.abs(acceleration-3)<.05;
  lab.calibrated=win;
  if(win)music.playPlateCue();
+ else requireResearchAfterFailure(lab.room);
  say(scienceLabs.result(lab,'mass',lab.load+' kg under 12 N accelerates at '+scienceLabs.number(acceleration)+' m/s². '+(win?'Calibration accepted. Use the force dial.':'Target: 3 m/s².'),win));
 }
 function cancelLabControl(){
@@ -903,12 +1015,13 @@ function cancelLabControl(){
 }
 function runLabDial(){
  const lab=currentLab(), key=lab?.adjust;
- if(!key||busy)return;
+ if(!key||busy||labAccessMessage(lab.room))return;
  const value=lab.values[key];
  if(key==='hydraulic'){
   const force=scienceLabs.pistonForce(value,lab.piston), win=force>=600;
+  music.playHydraulicCue();
   animation={start:time,index:lab.piston,win,pressure:value,force};
-  performTrial(lab,key,win,value+' kPa produces '+force+' N. The gate needs 600 N.',1.05);
+  performTrial(lab,key,win,value+' kPa produces '+force+' N. '+(win?'The gate rises.':'The gate stays down. It needs 600 N.'),1.05);
  }else if(key==='crank'){
   const torque=scienceLabs.crankTorque(value), win=torque>=18;
   if(win)bridgeStart=time;
@@ -927,7 +1040,8 @@ function runLabDial(){
   performTrial(lab,key,Math.abs(net)<=2,'Net torque: '+scienceLabs.number(Math.abs(net))+' N·m'+(net?(net>0?' clockwise.':' counterclockwise.'):'.'),.75);
  }
 }
-function performTrial(lab,key,win,message,seconds,{accepted=win,onSettle,onWin}={}){
+function performTrial(lab,key,win,message,seconds,{onSettle,onWin,failed=!win}={}){
+ if(failed)requireResearchAfterFailure(lab.room);
  const token=++attemptId;
  const dial=Boolean(lab.adjust);
  busy=true;choosing=false;
@@ -938,13 +1052,12 @@ function performTrial(lab,key,win,message,seconds,{accepted=win,onSettle,onWin}=
   busy=false;
   onSettle?.();
   if(roomIndex!==9)passed=win;
-  if(win)lab.adjust=null;
-  choosing=dial&&!win;
+  choosing=dial&&!win&&!labAccessMessage(lab.room);
+  if(!choosing)lab.adjust=null;
   if(win)onWin?.();
   if(key==='friction')lab.lastTrial={index:lab.trial.index};
   if(key==='momentum')lab.lastTrial={speed:lab.trial.speed};
-  lab.lastFeedback=scienceLabs.result(lab,key,win?message+' Repair complete.':message,accepted);
-  say(lab.lastFeedback);
+  say(message);
   renderActions();
   saveProgress();
  },seconds*1000);
@@ -957,7 +1070,7 @@ const plans={
  3:{name:'Dispatch office',dir:'north',title:'Transfer track log',reading:'Both incoming carts travel at 2 m/s. The receiving cart is initially stationary and has a mass of 2 kg. They latch together on impact. The combined speed must reach at least 1.2 m/s to trip the catch.',principle:'Divide the incoming momentum by the combined mass to predict the coupled speed.'},
  4:{name:'Bridge survey room',dir:'north',title:'Bridge load diagram',reading:'The fixed 4 kg load sits 1 m left of the pivot. There are sockets 1 m, 2 m, and 3 m to the right, for a 2 kg counterweight.',principle:'To balance the bridge, the clockwise and counterclockwise torques must match. Both weights contain the same factor of g, so compare mass times distance.'},
  5:{name:'Pump service room',dir:'west',title:'Hydraulic service sheet',reading:'The pump supplies 40 kPa to either piston. The wider one has 200 cm² of area and the narrow one has 80 cm². The gate needs at least 600 N of upward force.',principle:'Pressure times area gives the piston force. At equal pressure the wider piston pushes harder and travels less distance for the same fluid volume.'},
- 6:{name:'Brake control room',dir:'west',title:'Guardian brake procedure',reading:'The guardian carries 10 kg·m/s of momentum. The available carts carry 6 or 10 kg·m/s. The brake engages when a collision brings the coupled pair to rest.',principle:'Momentum has direction. On each pass match the magnitude and oppose the guardian’s current direction.'},
+ 6:{name:'Brake control room',dir:'west',title:'Guardian brake procedure',reading:'The Guardian starts at +10 kg·m/s and shifts to −6 kg·m/s after the first stop. The available carts carry 6 or 10 kg·m/s. The brake engages when a collision brings the coupled pair to rest.',principle:'Momentum has direction. On each pass match the magnitude and oppose the guardian’s current direction.'},
  9:{name:'Garden maintenance room',dir:'south',title:'Drawbridge crank sketch',reading:'The inner socket is 15 cm from the axle and the outer socket is 40 cm away. Both accept the same perpendicular push. The winch needs more turning torque than the inner socket can provide.',principle:'A longer lever arm gives more torque at the same applied force.'}
 };
 const researchFixtures={
@@ -975,7 +1088,7 @@ function nearbySource(){
 const labPlans={
  0:{reading:'The occupied platform weighs 520 N. Carry a 400 N or 680 N test load to the hook and pull the lift lever.',principle:'The pulley connects the two sides. The heavier side descends and lifts the lighter side. Compare each counterweight with the occupied platform.'},
  5:{reading:'The pump can supply up to 40 kPa. The piston ports have areas of 200 cm² and 80 cm². Route the pump to a port, then adjust the pressure. The gate needs 600 N.',principle:'Force equals pressure × area. Convert kPa to Pa and cm² to m². For example, 10 kPa on 100 cm² gives 100 N.'},
- 6:{reading:'The 2 kg cart launches at 3 m/s. The 5 kg cart launches at 2 m/s. The guardian carries 10 kg·m/s and reverses after the first successful stop.',principle:'Calculate momentum as mass × velocity. Coupled carts stop when their momenta cancel. The left launcher sends carts right, and the right launcher sends carts left.'},
+ 6:{reading:'The 2 kg cart launches at 3 m/s. The 5 kg cart launches at 2 m/s. The Guardian starts at +10 kg·m/s. After the first stop it reverses and shifts to −6 kg·m/s. Launch when the gate reads LAUNCH.',principle:'Calculate momentum as mass × velocity. Coupled carts stop when their momenta cancel. The left launcher sends carts right, and the right launcher sends carts left.'},
  9:{reading:'Push perpendicular to the crank with 50 N. Slide its grip between 15 and 45 cm from the axle. The drawbridge needs at least 18 N·m of torque.',principle:'Torque equals force × distance from the axle. Use metres. For example, 50 N on a 20 cm lever produces 10 N·m.'},
  1:{title:'Friction and stopping distance',reading:'Each lane launches the same sled at 4 m/s. A gold band marks the target range, 2.6 to 3.6 m.',principle:'Friction acts opposite motion. With the same launch speed, stronger friction stops the sled sooner. Compare the distances and adjust your choice.'},
  2:{title:'Mass and balanced forces',reading:'First carry a test mass to the pressure plate. The accelerator applies 12 N and needs 3 m/s². Once it is calibrated, set the dial to balance a fixed 12 N rightward pull.',principle:'Net force equals mass × acceleration. For example, 8 N gives 2 m/s² to a 4 kg object. For balance, forces cancel when they have equal sizes and opposite directions.'},
@@ -992,13 +1105,14 @@ plans[1].name='Track booth';
 plans[2].name='Calibration workshop';
 const planOwners=Object.keys(plans).map(Number);
 const recovered=new Set(), recordedReadings=new Set();
-const readingRequired=id=>scienceLabs.requiredReadings.includes(id)&&!recordedReadings.has(id);
 for(const [i,owner] of planOwners.entries()){
  const plan=plans[owner];
  plan.room=16+i;
  rooms.push({name:plan.name,floor:rooms[owner].floor,planOwner:owner,goal:'Inspect the '+researchSource(owner).name.toLowerCase()+'.'});
 }
 rooms.push(...observatory.rooms);
+const calibrationRoom=rooms.length;
+rooms.push({name:'Garden Calibration Shed',floor:'Castle grounds',goal:'Move the sled onto the 5 kg plate while Mira holds the safety interlock.'});
 function findPlan(owner){
  const plan=plans[owner];
  return 'Look for the '+plan.name+' through the '+plan.dir+' door.';
@@ -1035,19 +1149,98 @@ function researchDiagram(owner){
  return '<figure class="plan-diagram"><svg viewBox="0 0 340 155" role="img" aria-label="'+title+'">'+content+'</svg><figcaption>'+title+'</figcaption></figure>';
 }
 
-function openPlan(owner,collect=false,source,back=close){
+// Each annex asks the player to apply one principle before filing its plan.
+const researchChecks={
+ 0:{clue:'A rope connects the platform and the counterweight. Either side can move.',question:'If you increase the counterweight past the weight of the platform, which side starts moving down?',choices:['The platform','The counterweight','Both sides'],answer:1,hint:'The heavier side pulls the lighter side up.'},
+ 1:{clue:'The same sled starts each run with the same speed.',question:'One lane stops the sled sooner. What does that tell you about its friction?',choices:['The lane pushes forward harder','The lane has weaker friction','The lane has stronger friction'],answer:2,hint:'Friction acts against motion. Stronger friction slows the sled more quickly.'},
+ 2:{clue:'The same horizontal force is applied to two carts, one light and one heavy.',question:'Which cart speeds up more in the same amount of time?',choices:['The lighter cart','The heavier cart','Both speed up equally'],answer:0,hint:'For the same force, acceleration is force divided by mass.'},
+ 3:{clue:'A moving cart hits a cart at rest. The carts latch together, and the track gives them almost no push during impact.',question:'How does their shared speed compare with the incoming cart’s speed?',choices:['It is higher','It is lower','It is the same'],answer:1,hint:'The same total momentum is now carried by more mass.'},
+ 4:{clue:'Two weights hang on opposite sides of a pivot.',question:'How can the lighter weight balance the heavier one?',choices:['Put both at the same distance','Move the lighter weight closer to the pivot','Move the lighter weight farther from the pivot'],answer:2,hint:'At the same weight, increasing the distance from the pivot increases torque.'},
+ 5:{clue:'Pump pressure is the same in both piston ports.',question:'Which piston provides more lifting force at that pressure?',choices:['The one with the wider face','The one with the narrower face','Both provide the same force'],answer:0,hint:'Pressure is force per unit area. Each additional unit of piston area adds force.'},
+ 6:{clue:'After impact, the cart and Guardian move together. The brake catches them when they come to rest.',question:'If the Guardian is moving east, what momentum should the cart have just before contact?',choices:['The same magnitude and direction','The same magnitude, directed west','A smaller magnitude, directed west'],answer:1,hint:'The total must be zero. Equal and opposite momenta cancel.'},
+ 9:{clue:'You can apply the same perpendicular push at two grips on a crank.',question:'Which grip gives the most torque?',choices:['The grip nearest the axle','Both grips produce the same torque','The grip farthest from the axle'],answer:2,hint:'Torque is force times the perpendicular distance from the axle.'}
+};
+function researchPrediction(owner){
+ const fallback=researchChecks[owner];
+ const lab=labSessions.get(owner);
+ if(owner===0){
+  const weight=lab?.load??(solved.has(owner)?680:400);
+  const force=scienceLabs.liftDifference(weight);
+  return {clue:'The platform weighs 520 N. '+(lab?.load||solved.has(owner)?'Your counterweight is ':'Suppose the counterweight is ')+weight+' N.',
+   question:'Which way would the platform start accelerating if both ends could move freely?',
+   choices:['Upward','Downward','No acceleration'],answer:force>0?0:force<0?1:2,visual:'force',
+   hint:'The heavier side of the rope moves down.',
+   explanation:force===0?'The two sides balance, so the platform has no acceleration.':'The '+(force<0?'platform':'counterweight')+' is heavier by '+Math.abs(force)+' N, so the platform accelerates '+(force<0?'downward':'upward')+'.'};
+ }
+ if(owner===1){
+  const run=lab?.trial??(solved.has(owner)?scienceLabs.friction(1):null);
+  const clue=run?'Your sled launched at '+run.speed+' m/s and stopped after '+scienceLabs.number(run.distance)+' m.':
+   'The sled launches at 4 m/s and slows down as it slides.';
+  return {clue,question:'Which speed–time graph matches the sled from launch until it stops?',
+   choices:['Steady speed','Speed increasing','Speed decreasing to zero'],answer:2,visual:'speed',
+   hint:'The sled has a nonzero speed at launch. Friction lowers its speed until it stops.',
+   explanation:run?'Your sled slowed to zero in about '+scienceLabs.number(run.speed/run.deceleration)+' s.':
+    'The sled starts with a positive speed. Friction brings it to zero.'};
+ }
+ return fallback;
+}
+function predictionGraphic(visual,index){
+ if(visual==='force'){
+  const path=['M32 29V4m-7 7 7-7 7 7','M32 4v25m-7-7 7 7 7-7','M26 17h12'][index];
+  return '<svg viewBox="0 0 64 35" aria-hidden="true"><path d="'+path+'" fill="none" stroke="currentColor" stroke-width="3"/></svg>';
+ }
+ const path=['M22 18h35','M22 25 57 8','M22 7 57 29'][index];
+ return '<svg viewBox="0 0 76 42" aria-hidden="true"><path d="M18 5v24h48" fill="none" stroke="currentColor" opacity=".65"/>'+
+  '<text x="2" y="12" fill="currentColor" font-size="8">v</text><text x="66" y="39" fill="currentColor" font-size="8">t</text>'+
+  '<path d="'+path+'" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>';
+}
+function planActionLabel(owner){
+ return recovered.has(owner)?'Read plan':'Try research challenge';
+}
+function inspectResearch(){
+ const owner=room().planOwner, source=nearbySource();
+ if(owner===undefined||!source)return;
+ if(recovered.has(owner)){openPlan(owner,true,source);return;}
+ const check=researchPrediction(owner);
+ function ask(feedback=''){
+  dialog('<h2>'+source.name+' challenge</h2><p>'+check.clue+'</p><p><strong>'+check.question+'</strong></p>'+
+   (feedback?'<p class="report-feedback" role="status">'+feedback+'</p>':'')+
+   '<div class="dialog-choices" id="topics"></div><hr><button id="dismiss">Back to the room</button>',{focus:false});
+  check.choices.forEach((choice,index)=>{
+   const option=button($('topics'),choice,()=>{
+    if(index===check.answer)openPlan(owner,true,source,close,check.explanation);
+    else ask(check.hint);
+   });
+   if(check.visual){
+    option.classList.add('prediction-choice');
+    option.innerHTML=predictionGraphic(check.visual,index)+'<span>'+choice+'</span>';
+   }
+  });
+  $('dismiss').onclick=close;
+  setChoice(0);
+ }
+ ask();
+}
+
+function openPlan(owner,collect=false,source,back=close,explanation=''){
  const plan=plans[owner];
  let unlocked='';
+ let fieldNote='';
  if(collect){
   const newDiscovery=!recovered.has(owner);
   recovered.add(owner);
   const instrument=scienceLabs.instrumentByRoom[owner];
   if(!acquired.has(instrument)){acquired.add(instrument);unlocked=instrument;}
-  if(newDiscovery)music.playDiscoveryCue();
+  if(newDiscovery){
+   music.playDiscoveryCue();
+   fieldNote=avatar==='Rowan'
+    ?'I’ll trace which parts move together before I change a setting.'
+    :'I’ll change one setting at a time so I can compare the results.';
+  }
   saveProgress();
   say(plan.title+' filed. Take the '+opposite[plan.dir]+' door back to '+rooms[owner].name+'.');
  }
- dialog('<div class="plan-paper '+(source?.kind||'paper')+'"><span class="plan-source">'+(source?.name||'Field notebook')+'</span><h2>'+plan.title+'</h2><div class="plan-grid"><div><h3>Measurements</h3><p>'+plan.reading+'</p><h3>How to reason it through</h3><p>'+plan.principle+'</p></div>'+researchDiagram(owner)+'</div>'+(unlocked?'<p class="tool-unlock">Equipment ready · '+unlocked+'</p>':'')+'<button class="gold" id="dismiss">'+(collect?'File in notebook':back===close?'Back to the room':'Back to discoveries')+'</button></div>');
+ dialog('<div class="plan-paper '+(source?.kind||'paper')+'"><span class="plan-source">'+(source?.name||'Field notebook')+'</span><h2>'+plan.title+'</h2>'+(explanation?'<p class="plan-confirmation">'+explanation+'</p>':'')+'<div class="plan-grid"><div><h3>Measurements</h3><p>'+plan.reading+'</p><h3>How to reason it through</h3><p>'+plan.principle+'</p></div>'+researchDiagram(owner)+'</div>'+(fieldNote?'<p class="field-note"><strong>'+avatar+'</strong> · '+fieldNote+'</p>':'')+(unlocked?'<p class="tool-unlock">Equipment ready · '+unlocked+'</p>':'')+'<button class="gold" id="dismiss">'+(collect?'File in notebook':back===close?'Back to the room':'Back to discoveries')+'</button></div>');
  $('sheet').classList.add('research-sheet');
  $('dismiss').onclick=back;
 }
@@ -1064,18 +1257,17 @@ function objective(){
  if(prompt)return prompt;
  if(room().planOwner!==undefined){
   const owner=room().planOwner;
-  return recovered.has(owner)?'Take the '+opposite[plans[owner].dir]+' door back to '+rooms[owner].name+'.':'Inspect the '+researchSource(owner).name.toLowerCase()+' for the repair plan.';
+  return recovered.has(owner)?'Take the '+opposite[plans[owner].dir]+' door back to '+rooms[owner].name+'.':
+   'Solve the challenge at the '+researchSource(owner).name.toLowerCase()+' to unlock the repair plan.';
  }
- if(operators[roomIndex]&&!labDone()){
-  if(!recovered.has(roomIndex))return findPlan(roomIndex);
-  return labTask(currentLab());
- }
+ if(operators[roomIndex]&&!labDone())return scienceLabs.goal(currentLab());
  if(roomIndex===0){
   if(!discussed.has('Mira'))return 'Check in with Mira on the path. The north door leads into the castle.';
   return surveyRead?'Survey route recorded. Take the north door to the Great Hall.':'Take the north door to the Great Hall. The East Garden survey is an optional detour.';
  }
  if(roomPairs[roomIndex])return roomDirections(roomIndex);
- if(roomIndex===9)return surveyRead?'Survey route recorded. Return west to the courtyard.':'Cross the lowered drawbridge and inspect the survey marker on the north bank.';
+ if(roomIndex===9)return surveyRead?'Return west to the courtyard or explore the Calibration Shed to the east.':'Cross the lowered drawbridge to survey the north bank, or explore the Calibration Shed to the east.';
+ if(roomIndex===calibrationRoom)return explorationState.complete?'Badge earned. Test the apparatus again or head west to the garden.':room().goal;
  if(roomIndex===5)return 'Take the north door to the guardian chamber.';
  if(roomIndex===6)return finished?'Take the north door to Castle Ridge and follow the road to the observatory.':'Read the Flywheel Guardian’s diagnostic terminal at the east end of the chamber.';
  if(roomIndex===10&&surveyRead)return 'Follow your survey route east across Stonebridge. The orchard trail branches north.';
@@ -1096,16 +1288,16 @@ const fieldQuestions={
 };
 
 const operators={
- 0:['Lift operator Sol',443,266,'The lift stalled with Mira below the landing. I can’t tell which counterweight will lift her.','Lift limit switch','The heavier counterweight produces an upward net force on the occupied platform.','The heavier counterweight reduces the pull on the platform.'],
- 1:['Track operator Fen',443,266,'The track relay needs a sled to stop in the gold zone. Each lane has a different surface.','Timing relay','The stopping distance changes with friction even though the sled starts at the same speed.','The stopping distance changes because each lane launches the sled at a different speed.'],
- 2:['Workshop lead Lin',443,266,'The drive clutch needs a calibrated test mass and balanced pulls.','Drive clutch','The mass sets the acceleration, and equal pulls in opposite directions balance the bench.','A larger mass accelerates faster under the same force, and pulls in the same direction cancel.'],
- 3:['Dispatcher Pax',443,266,'I can get the receiving cart moving, but it stops short of the catch.','Brake supply cart','The incoming cart shares its momentum with the stationary cart. A faster launch makes the joined pair roll farther.','The receiving cart gains speed without changing the motion of the incoming cart.'],
- 4:['Bridge operator Uma',443,266,'The bridge keeps tilting under the fixed load.','Service platform lock','The 2 kg weight at 2 m balances the 4 kg weight at 1 m.','Both loads should sit at the same distance from the pivot.'],
- 5:['Pump operator Dev',443,266,'The pump builds pressure, but the gate still won’t lift.','Hydraulic brake pressure','The wider piston has more area, so the same pressure produces more force.','The narrower piston makes more force because it travels farther.'],
- 6:['Guardian technician Kit',443,266,'The guardian is racing on its test rail. The repair checks are in. The brake can only catch when the coupled pair comes to rest.','Guardian brake','The cart matches the guardian’s momentum magnitude and travels in the opposite direction. Their signed momenta add to zero.','The cart should travel in the same direction to cancel the guardian’s momentum.'],
- 9:['Teo',481,213,'The drawbridge stayed up after the outage. I’m not getting enough torque at the winch.','East Garden drawbridge','The outer socket is farther from the axle, giving more torque at the same push.','The inner socket gives more torque because it’s closer to the axle.']
+ 0:['Lift operator Sol',443,266,'The lift stalled with Mira below the landing. I can’t tell which counterweight will lift her.','Lift limit switch'],
+ 1:['Track operator Fen',443,266,'The track relay needs a sled to stop in the gold zone. Each lane has a different surface.','Timing relay'],
+ 2:['Workshop lead Lin',443,266,'The drive clutch needs a calibrated test mass and balanced pulls.','Drive clutch'],
+ 3:['Dispatcher Pax',443,266,'I can get the receiving cart moving, but it stops short of the catch.','Brake supply cart'],
+ 4:['Bridge operator Uma',443,266,'The bridge keeps tilting under the fixed load.','Service platform lock'],
+ 5:['Pump operator Dev',443,266,'The pump builds pressure, but the gate still won’t lift.','Hydraulic brake pressure'],
+ 6:['Guardian technician Kit',443,266,'The guardian is racing on its test rail. The repair checks are in. The brake can only catch when the coupled pair comes to rest.','Guardian brake'],
+ 9:['Teo',481,213,'The drawbridge stayed up after the outage. I’m not getting enough torque at the winch.','East Garden drawbridge']
 };
-const consulted=new Set(), reported=new Set(), discussed=new Map();
+const consulted=new Set(), researchRequired=new Set(), reported=new Set(), discussed=new Map();
 const confirmedCount=()=>[0,1,2,3,4,5].filter(i=>reported.has(i)).length;
 const operatorCoats={0:'#bc9361',1:'#927d5a',2:'#8199a3',3:'#94667d',4:'#63978d',5:'#b08e58',6:'#8f9d83',9:'#bf9360'};
 const operatorPoint=()=>operators[roomIndex]?{x:operators[roomIndex][1],y:operators[roomIndex][2]}:null;
@@ -1121,6 +1313,9 @@ function refreshProgress(){
   confirmedCount()+' of 6 safety checks confirmed. Guardian '+(finished?'online.':'restart pending.'));
 }
 function needsReport(index){return !reported.has(index)&&(index===9?gardenBridge:solved.has(index));}
+function repairNext(index){
+ return 'Talk to '+operators[index][0]+' to explain the repair.';
+}
 function operatorPrompt(){
  const lead=observatory.reportLead(roomIndex,observatoryState);
  if(lead)return 'Return to '+observatory.leadName(observatory.floorFor(roomIndex))+' to explain your repair.';
@@ -1128,9 +1323,8 @@ function operatorPrompt(){
  if(step)return step.text;
  const operator=operators[roomIndex];
  if(!operator)return '';
- if(needsReport(roomIndex))return 'Talk to '+operator[0]+' to explain your repair and reopen the gate.';
- if(!consulted.has(roomIndex))return 'Talk to '+operator[0]+' beside the controls to begin.';
- return '';
+ if(needsReport(roomIndex))return repairNext(roomIndex);
+ return !busy&&!labDone()?labAccessMessage(roomIndex):'';
 }
 function operatorNext(index){
  if(index===9){
@@ -1142,45 +1336,84 @@ function operatorNext(index){
  const exit=links[index].find(door=>door.to===hall);
  return 'Head '+exit.dir+' back to the '+rooms[hall].name+'. '+roomDirections(hall);
 }
+const castleDebriefs={
+ 0:{
+  question:'The platform rose with the 680 N counterweight. What made it rise?',
+  choices:['The platform weighed more, so the rope pulled it up.','The counterweight weighed more. It moved down and pulled the platform up.','The two weights balanced, so the platform rose on its own.'],
+  answer:1,hint:'Compare 680 N with the 520 N occupied platform. The heavier side moves down.'
+ },
+ 1:{
+  question:'All three lanes used the same launch speed. Why did the stone lane stop the sled in the gold zone?',
+  choices:['It slowed the sled less than the smooth lane.','The sled had less mass on stone.','Its friction was between the smooth and rough lanes, so the stopping distance was between theirs.'],
+  answer:2,hint:'With the same sled and launch speed, stronger friction means a shorter stop.'
+ },
+ 2:{
+  question:'Once the test mass was calibrated, why did a 12 N left pull balance the 12 N right pull?',
+  choices:['Equal pulls in opposite directions add to zero net force.','Equal pulls add to 24 N toward the heavier side.','The calibrated mass removed the rightward force.'],
+  answer:0,hint:'The force arrows point in opposite directions. One contribution subtracts from the other.'
+ },
+ 3:{
+  question:'At impact, why was the coupled pair slower than the incoming cart?',
+  choices:['Its momentum doubled at impact.','Nearly the same total momentum was carried by a larger combined mass.','The cart at rest had an equal and opposite momentum.'],
+  answer:1,hint:'During the short impact, compare the pair’s total momentum just before and just after the carts latch.'
+ },
+ 4:{
+  question:'Why did the lighter counterweight work farther from the pivot?',
+  choices:['Moving outward increased the counterweight’s weight.','Both weights pulled in the same rotational direction.','The longer lever arm gave the lighter weight enough torque to balance the heavier weight.'],
+  answer:2,hint:'Compare the two products of weight and distance from the pivot.'
+ },
+ 5:{
+  question:'At the same pressure, why could the wider piston lift the gate?',
+  choices:['Pressure acted over a larger area, so the piston exerted more force.','The wider piston made the pump pressure twice as high.','A wider piston always moves farther, even with the same fluid volume.'],
+  answer:0,hint:'Pressure is force per unit area. The pump can provide the same pressure at either port.'
+ },
+ 6:{
+  question:'Why did you change carts and launch from the other side for the second brake pass?',
+  choices:['Switching sides alone cancels the Guardian’s momentum at either speed.','The cart needed more momentum in the same direction as the Guardian.','The Guardian’s momentum changed from +10 to −6 kg·m/s. The return cart needed +6 kg·m/s.'],
+  answer:2,hint:'Both the magnitude and direction changed. The total has to be zero on each pass.'
+ },
+ 9:{
+  question:'Why did moving the crank grip outward lower the bridge with the same push?',
+  choices:['The longer grip made the push stronger.','The same push acted farther from the axle and produced more torque.','The push acted closer to the axle and produced more torque.'],
+  answer:1,hint:'A perpendicular push produces torque equal to the force times its distance from the axle.'
+ }
+};
+function explainCastleRepair(index,retrying=false){
+ const [name,,,,system]=operators[index];
+ const {question,choices,answer,hint}=castleDebriefs[index];
+ const feedback=retrying?'<p class="report-feedback" role="status">'+hint+' Try again.</p>':'';
+ showSpeech(name,question,'explaining',feedback+
+  '<div class="dialog-choices" id="topics"></div><hr><button id="dismiss">Back to the room</button>',{focus:false});
+ choices.forEach((text,choice)=>button($('topics'),text,()=>{
+  if(roomIndex!==index||!needsReport(index))return;
+  if(choice!==answer){explainCastleRepair(index,true);return;}
+  reported.add(index);
+  repairFlash={room:roomIndex,start:time};
+  music.playRepairCue();
+  saveProgress();
+  refreshProgress();
+  const next=operatorNext(index);
+  say(next);
+  renderActions();
+  showSpeech(name,'That explains it. '+system+' confirmed. '+next,'celebratory','<button class="gold" id="dismiss">Back to the room</button>');
+  $('dismiss').onclick=()=>{if(repairFlash?.room===index)repairFlash.start=time;close();};
+ }));
+ $('dismiss').onclick=close;
+ setChoice(0);
+}
 function operatorTalk(index){
- const [name,,,concern,system,correct,incorrect]=operators[index];
+ const [name,,,concern,system]=operators[index];
  if(!consulted.has(index)){consulted.add(index);saveProgress();renderActions();}
  const repaired=index===9?gardenBridge:solved.has(index);
- if(needsReport(index)){
-  showSpeech(name,'It’s working. What did you change?','happy','<div class="dialog-choices" id="topics"></div><hr><button id="dismiss">I’ll check my notes</button>',{focus:false});
-  function answer(understood){
-   if(!understood){
-    showSpeech(name,'That doesn’t match what the instrument did. Check your plan, then tell me again.','thinking','<button id="dismiss">Back to the room</button>');
-    $('dismiss').onclick=close;
-    return;
-   }
-   reported.add(index);
-   repairFlash={room:roomIndex,start:time};
-   music.playRepairCue();
-   saveProgress();
-   refreshProgress();
-   const next=operatorNext(index);
-   say(next);
-   renderActions();
-   showSpeech(name,system+' confirmed. '+next,'celebratory','<button class="gold" id="dismiss">Back to the room</button>');
-   $('dismiss').onclick=close;
-  }
-  const choices=index%2?[[incorrect,false],[correct,true]]:[[correct,true],[incorrect,false]];
-  if(!discussed.has(name))discussed.set(name,new Set());
-  const used=discussed.get(name);
-  for(const [text,understood] of choices){
-   const asked=used.has(text);
-   button($('topics'),text+(asked?' · Tried':''),()=>{used.add(text);saveProgress();answer(understood);},asked?'asked':'');
-  }
-  $('dismiss').onclick=close;setChoice(0);return;
- }
+ if(needsReport(index)){explainCastleRepair(index);return;}
  if(repaired){
   talk({name,greeting:system+' confirmed. '+operatorNext(index),mood:'happy',topics:[fieldQuestions[index]]});
  }else{
   const planTopic=recovered.has(index)
-   ?['What should I try at the controls?',labTask(currentLab())]
+   ?['What should I try at the controls?',scienceLabs.goal(currentLab())]
    :['Where can I check the settings?',findPlan(index)+' Read the '+researchSource(index).name.toLowerCase()+'.'];
-  talk({name,greeting:recovered.has(index)?'You found the plan. Let’s get the mechanism working.':concern,mood:recovered.has(index)?'explaining':'concerned',topics:[
+  talk({name,greeting:recovered.has(index)?'You found the plan. Let’s get the mechanism working.':
+   labAccessMessage(index)||concern+' Try the controls. If a trial fails, check the research plan before retrying.',mood:recovered.has(index)?'explaining':'concerned',topics:[
    planTopic,fieldQuestions[index],
    ['What does this repair unlock?',index===9?'The lowered bridge opens the north bank and its survey marker.':system+' is part of the guardian’s restart checklist. The guardian will stay in fault mode until all the required checks are in.']
   ]});
@@ -1192,7 +1425,15 @@ function repairFrontMenu(){
  showPauseMenu();
 }
 function showPauseMenu(){
- dialog('<h2>Paused</h2><div class="choices"><button id="dismiss" class="gold">Resume game</button><button id="pause-journal">Field notebook</button><button id="music-settings">Music settings</button><button id="title">Return to title screen</button></div>');
+ const timing=roomIndex===6&&!labDone()?'<button id="guardian-timing" aria-pressed="'+relaxedGuardianTiming+'">Relaxed launch timing: '+(relaxedGuardianTiming?'On':'Off')+'</button>':'';
+ dialog('<h2>Paused</h2><div class="choices"><button id="dismiss" class="gold">Resume game</button><button id="pause-journal">Field notebook</button><button id="music-settings">Music settings</button>'+timing+'<button id="title">Return to title screen</button></div>');
+ if(timing)$('guardian-timing').onclick=()=>{
+  relaxedGuardianTiming=!relaxedGuardianTiming;
+  try{localStorage.setItem(guardianTimingKey,relaxedGuardianTiming?'on':'off');}catch{}
+  const control=$('guardian-timing');
+  control.textContent='Relaxed launch timing: '+(relaxedGuardianTiming?'On':'Off');
+  control.setAttribute('aria-pressed',String(relaxedGuardianTiming));
+ };
  $('pause-journal').onclick=()=>{close();notebook();};
  $('music-settings').onclick=()=>openMusicSettings(showPauseMenu);
  $('title').onclick=intro;
@@ -1228,12 +1469,12 @@ function saveProgress(){
  }
  savedRun={
   avatar,room:roomIndex,entry:roomEntry,
-  solved:[...solved],reported:[...reported],consulted:[...consulted],recovered:[...recovered],
+  solved:[...solved],reported:[...reported],consulted:[...consulted],researchRequired:[...researchRequired],recovered:[...recovered],
   visited:[...visited],tools:[...acquired],readings:[...recordedReadings],fieldReports:[...fieldReports],
   discussed:[...discussed].map(([name,topics])=>[name,[...topics]]),
   gardenBridge,surveyRead,shortcutOpen,finished,vistaSeen,arrived,observatory:observatoryState,
-  labs:[...labSessions].filter(([id])=>id===9?!gardenBridge:!solved.has(id)).map(([id,lab])=>[id,scienceLabs.snapshot(lab)]),
-  curiosities:[...curiosities]
+  labs:[...labSessions].filter(([id])=>!reported.has(id)&&!needsReport(id)).map(([id,lab])=>[id,scienceLabs.snapshot(lab)]),
+  curiosities:[...curiosities],exploration:exploration.snapshot(explorationState)
  };
  writeProgress();
 }
@@ -1274,6 +1515,8 @@ function resumeRun(){
  for(const [target,values] of [[solved,run.solved],[reported,run.reported],[consulted,run.consulted],[recovered,run.recovered]]){
   restore(target,values,isChallenge);
  }
+ const legacyTrials=!Array.isArray(run.researchRequired);
+ restore(researchRequired,legacyTrials?run.trialUsed:run.researchRequired,isChallenge);
  restore(visited,run.visited,id=>Number.isInteger(id)&&Boolean(rooms[id]));
  restore(acquired,run.tools,tool=>Object.hasOwn(scienceLabs.instruments,tool));
  restore(recordedReadings,run.readings,isChallenge);
@@ -1295,11 +1538,19 @@ function resumeRun(){
  shortcutOpen=run.shortcutOpen===true;finished=run.finished===true;
  vistaSeen=run.vistaSeen===true;arrived=run.arrived===true;
  observatoryState=observatory.restore(run.observatory);
+ explorationState=exploration.restore(run.exploration,run.room===calibrationRoom);
  restore(curiosities,run.curiosities,questExtras.known);
  if(Array.isArray(run.labs))for(const entry of run.labs){
   if(!Array.isArray(entry))continue;
   const [id,lab]=entry;
-  if(isChallenge(id)&&lab&&typeof lab==='object'&&(id===9?!gardenBridge:!solved.has(id)))labSessions.set(id,scienceLabs.restore(id,lab,time));
+  if(isChallenge(id)&&lab&&typeof lab==='object'&&!reported.has(id)&&!needsReport(id)){
+   labSessions.set(id,scienceLabs.restore(id,lab,time));
+  }
+ }
+ if(legacyTrials){
+  // Older runs also marked successful calibration and the first successful brake pass as spent.
+  if(labSessions.get(2)?.calibrated)researchRequired.delete(2);
+  if(labSessions.get(6)?.brakes===1)researchRequired.delete(6);
  }
  if(solved.has(0))Object.assign(mira,{x:235,y:252,walking:false});
  avatar=run.avatar;
@@ -1317,7 +1568,7 @@ function syncResearchLabel(target=canMove()?activeInteraction():null){
  const notes=$('notes');
  notes.lastChild.textContent=' '+label;
  notes.setAttribute('aria-label',label);
- notes.setAttribute('data-touch-label',label==='Read instrument'?'Read':label==='Read plan'?'Plan':'Notes');
+ notes.setAttribute('data-touch-label',label==='Read instrument'?'Read':['Read plan','Try research challenge'].includes(label)?'Plan':'Notes');
 }
 function syncUtilityButtons(){
  updateSpeechHint();
@@ -1371,9 +1622,10 @@ const initialPeople=new Map();
 const operatorFacing=new Map(), observatoryFacing=new Map();
 function clearSession(){
  sessionId++;attemptId++;
- roomTransition=null;roomEntry=null;repairFlash=null;observatoryRepair=null;
- labSessions.clear();fieldReports.clear();curiosities.clear();
- for(const list of [recovered,consulted,reported,solved,visited,acquired,recordedReadings,attempts,discussed])list.clear();
+ roomTransition=null;roomEntry=null;repairFlash=null;observatoryRepair=null;guardianShift=null;
+ labSessions.clear();fieldReports.clear();curiosities.clear();activeOverlays.clear();
+ explorationState=exploration.fresh();
+ for(const list of [recovered,consulted,researchRequired,reported,solved,visited,acquired,recordedReadings,attempts,discussed])list.clear();
  operatorFacing.clear();observatoryFacing.clear();
  shortcutOpen=false;
  gardenBridge=false;bridgeStart=null;surveyRead=false;
@@ -1414,7 +1666,7 @@ function confirmStart(name,area,goBack){
 function guardianComic(){
  const pages=[
   ['The safety loop broke','The blackout knocked out the lift interlock, timing relay, clutch, service cart, platform lock, and hydraulic supply. The guardian lost its safety checks and stayed in fault mode.'],
-  ['The brake could finally engage','Each confirmed repair restored part of the safety loop. You matched the guardian’s momentum in the opposite direction on each pass. The coupled pair stopped, and the restored brake clamped.'],
+  ['The brake could finally engage','The first stop tripped the gear shift. The Guardian reversed and its momentum dropped from 10 to 6 kg·m/s in magnitude. You switched carts and launchers so the new momenta canceled.'],
   ['Guardian online','With the wheel stopped and the safety checks confirmed, the restart worked. The recovered records show the valley’s faults are spreading. An offworld archive may explain how another civilization survived the same failure. Reach it through the E&M Observatory.']
  ];
  let page=0;
@@ -1433,7 +1685,7 @@ const threshold={
 };
 const opposite={north:'south',south:'north',east:'west',west:'east'};
 const passages=[
- [0,'north',7,[0]],[0,'east',9,[]],
+ [0,'north',7,[0]],[0,'east',9,[]],[9,'east',calibrationRoom,[9]],
  [7,'west',1,[]],[7,'east',2,[]],[7,'north',8,[1,2]],
  [8,'west',3,[]],[8,'east',4,[]],[8,'north',5,[3,4]],
  [5,'north',6,[5]],[6,'north',10,[-1]],
@@ -1454,7 +1706,7 @@ const isOpen=(door,from=roomIndex)=>!challengeLatch(door,from)&&prerequisitesMet
 const nearby=(point,radius)=>Math.hypot(player.x-point.x,player.y-point.y)<radius;
 $('menu').onclick=repairFrontMenu;
 const nearDoor=()=>links[roomIndex].find(door=>nearby(threshold[door.dir],33));
-const miraLook={coat:'#9b759a',hair:'#382e40'};
+const miraLook={sprite:'mira',coat:'#9b759a',hair:'#382e40'};
 const mira={x:273,y:105,walking:false};
 const people={8:{x:244,y:113,coat:'#ae7655',hair:'#55434b'},10:{x:468,y:231,coat:'#7e9160',hair:'#403c34'},11:{x:225,y:224,coat:'#637f98',hair:'#423540'},16:{x:461,y:201,coat:'#9a674d',hair:'#493434'},22:{x:250,y:201,coat:'#8f9d83',hair:'#443f39'},7:{x:487,y:118,coat:'#817eaa',hair:'#c2b39c'},9:{x:320,y:210,coat:'#bf9360',hair:'#41342d'},14:{x:542,y:188,coat:'#9c7659',hair:'#322d32'}};
 const patrols={
@@ -1495,14 +1747,6 @@ function listenToStudent(student){
  student.facing=adventure.face(student.facing,player.x-student.x,player.y-student.y);
  showSpeech(student.name,student.lastLine,'thinking','<button id="dismiss" class="gold">Continue</button>');
  $('dismiss').onclick=close;
-}
-const treeSites=[[28,59],[68,70],[97,44],[122,150],[162,62],[187,158],[221,57],[248,86],[297,60],[333,40],[336,153],[27,155]];
-function treeCollision(index,x,y){
- if(![0,9,10,11,14].includes(index))return false;
- return treeSites.some(([tx,ty])=>{
-  if(([0,9].includes(index)&&tx>70&&tx<285)||(index===11&&tx>=140&&tx<=214))return false;
-  return Math.abs(x-tx*2)<22&&Math.abs(y-ty*2)<15;
- });
 }
 function patrol(now){
  const person=people[roomIndex], route=patrols[roomIndex];
@@ -1572,6 +1816,9 @@ function activeInteraction(){
   for(const person of observatory.people(roomIndex,observatoryState))add('observatory-guide',person,32,5);
   if(roomIndex===observatory.lobby)add('observatory-exit',observatory.exit,33,4);
  }
+ if(roomIndex===calibrationRoom){
+  for(const control of exploration.controls(explorationState,player))add('calibration',control,30,5,{control});
+ }
  add('field',valleyInvestigations.stations[roomIndex],33,5);
  add('curiosity',questExtras.point(roomIndex),27);
  if(room().planOwner!==undefined)add('plan',researchSource(room().planOwner),37,6);
@@ -1595,6 +1842,7 @@ const zone=()=>activeInteraction()?.kind||'';
 
 const enter=(index,entry,spawn,resuming=false)=>{
  if(index!==roomIndex){
+  if(roomIndex===calibrationRoom&&!resuming)exploration.leave(explorationState);
   observatory.cancelTrials();
   observatoryRepair=null;
   if(observatory.floorFor(index)!==observatory.floorFor(roomIndex))observatory.returnPart(roomIndex,observatoryState);
@@ -1624,9 +1872,8 @@ const enter=(index,entry,spawn,resuming=false)=>{
  refreshProgress();
  const prompt=operatorPrompt();
  const lab=currentLab();
- const last=resuming&&!labDone()&&lab?.lastFeedback;
  const progress=resuming&&!labDone()&&lab&&(lab.calibrated||lab.brakes||lab.load||lab.carry||lab.piston!==null);
- const context=last?'Last result: '+last+' '+objective():progress?'Experiment setup restored. '+objective():objective();
+ const context=progress?'Experiment setup restored. '+objective():objective();
  say(prompt?(index===0&&!solved.has(0)?'Mira is stranded on the lift.':''):context);
  renderActions();
  if(!onTitle)music.setTheme(chapterTheme(index,finished));
@@ -1641,14 +1888,23 @@ function beginPassage(door){
  music.playDoorCue();
  if(reducedMotion()){enter(door.to,entry,door.spawn);return;}
  const portal=roomIndex===observatory.offworld||door.to===observatory.offworld;
- roomTransition={door,entry,portal,start:time,elapsed:0,switched:false};
+ const sameFloor=room().floor===rooms[door.to].floor||
+  roomIndex>=10&&roomIndex<=15&&door.to>=10&&door.to<=15;
+ const slide=!portal&&!door.spawn&&sameFloor;
+ let outgoing=null;
+ if(slide){
+  outgoing=document.createElement('canvas');
+  outgoing.width=720;outgoing.height=360;
+  outgoing.getContext('2d').drawImage(canvas,0,0);
+ }
+ roomTransition={door,entry,portal,outgoing,start:time,elapsed:0,switched:false};
  syncUtilityButtons();
 }
 function advancePassage(now){
  const transition=roomTransition;
  if(!transition)return;
  transition.elapsed=Math.max(0,now-transition.start);
- if((transition.elapsed>=passageHalf||reducedMotion())&&!transition.switched){
+ if((transition.outgoing||transition.elapsed>=passageHalf||reducedMotion())&&!transition.switched){
   transition.switched=true;
   enter(transition.door.to,transition.entry,transition.door.spawn);
  }
@@ -1667,11 +1923,16 @@ start=function(name){
   ['KRAK','The ground rolls','A tremor knocks you into the grass. Your field notebook lies open beside you. Across the yard, the castle lights go dark.'],
   ['THE COURTYARD','A voice from above','“'+name+'! Up here.” Mira is stranded on the lift. The emergency counterweights are still connected.']
  ];
+ function begin(){
+  $('sheet').classList.remove('comic','interlude-sheet');
+  setTitleScreen(false);
+  originalClose();
+  enter(0);
+ }
  function comic(){
   const [cue,title,caption]=chapters[page];
   dialog('<div class="comic-art panel-'+page+'" aria-hidden="true"></div><div class="comic-caption"><span class="tag">'+cue+' · '+(page+1)+' / 3</span><h2>'+title+'</h2><p>'+caption+'</p><div class="choices"><button id="comic-next" class="gold">'+(page===2?'Enter the courtyard':'Next panel')+'</button><button id="comic-skip">Skip opening</button></div></div>');
   $('sheet').classList.add('comic');
-  const begin=()=>{$('sheet').classList.remove('comic','interlude-sheet');setTitleScreen(false);originalClose();enter(0);};
   $('comic-skip').onclick=begin;
   $('comic-next').onclick=()=>{if(page===2)begin();else interlude();};
  }
@@ -1688,6 +1949,12 @@ function interact(){
  if(!canMove())return;
  const target=activeInteraction(), where=target?.kind;
  if(where==='lab'){useLabControl(target.control);return;}
+ if(where==='calibration'){
+  const wasComplete=explorationState.complete;
+  const reading=exploration.use(explorationState,target.control.id);
+  calibrationFeedback(reading,wasComplete);
+  return;
+ }
  if(where==='field'){
   const id=roomIndex;
   valleyInvestigations.open(id,result=>{
@@ -1702,7 +1969,7 @@ function interact(){
   operatorTalk(roomIndex);return;
  }
  if(where==='student'){listenToStudent(target.point);return;}
- if(where==='plan'){openPlan(room().planOwner,true,nearbySource());return;}
+ if(where==='plan'){inspectResearch();return;}
   if(where==='marker'){readMarker();return;}
  if(where==='exit'){finishStory();return;}
  if(where==='arrival'){arrival();return;}
@@ -1750,18 +2017,34 @@ function lockedText(door){
  if(door.required.includes(-1))return 'The guardian’s diagnostic terminal controls this door.';
  return 'Locked · '+door.required.filter(index=>!reported.has(index)).map(index=>rooms[index].name).join(' and ')+' still need attention.';
 }
+function calibrationFeedback(reading,wasComplete){
+ if(!wasComplete&&explorationState.complete){
+  music.playDiscoveryCue();
+  refreshProgress();
+ }else music.playDialCue();
+ if(reading)say(reading);
+ saveProgress();
+ renderActions();
+}
 function interactionLabel(target){
  switch(target.kind){
   case 'lab': {
-   const measure=recovered.has(roomIndex)&&consulted.has(roomIndex)&&readingRequired(roomIndex)&&target.control.id!=='reset';
-   return measure?'Use '+scienceLabs.instrumentByRoom[roomIndex].toLowerCase():target.control.label;
+   if(!consulted.has(roomIndex))return 'Speak to the operator first';
+   if(labAccessMessage(roomIndex))return 'Research through the '+plans[roomIndex].dir+' door';
+   if(target.control.id==='force'&&!currentLab().calibrated)return 'Inspect locked force dial';
+   if(roomIndex===6&&target.control.id.startsWith('launcher-')){
+    const lab=currentLab();
+    if(lab.cartIndex!==null&&!guardianCycle(lab).open)return 'Wait for the launch window';
+   }
+   return target.control.label;
   }
+  case 'calibration': return target.control.label;
   case 'field': return 'Study the '+target.point.name.toLowerCase();
   case 'curiosity': return 'Inspect curiosity';
   case 'operator': return needsReport(roomIndex)?'Explain the repair':'Talk to '+operators[roomIndex][0];
   case 'talk': return 'Talk';
   case 'student': return 'Listen to '+target.point.name;
-  case 'plan': return (recovered.has(room().planOwner)?'Review ':'Inspect ')+target.point.name;
+  case 'plan': return planActionLabel(room().planOwner);
   case 'marker': return 'Read the survey marker';
   case 'exit': return 'Read diagnostics';
   case 'arrival': return 'Enter the Observatory';
@@ -1785,7 +2068,10 @@ function renderActions(){
  if(passed&&room().kind&&!solved.has(roomIndex))solved.add(roomIndex);
  const prompt=operatorPrompt();
  const promptElement=$('operator-prompt');
- if(promptElement.textContent!==prompt)promptElement.textContent=prompt;
+ if(promptElement.textContent!==prompt){
+  promptElement.textContent=prompt;
+  $('status-message').scrollTop=0;
+ }
  promptElement.hidden=!prompt;
  say();
  syncUtilityButtons();
@@ -1906,13 +2192,14 @@ function observatoryReportEvidence(floor){
   (relay?'<p><strong>'+escape(relay.settings)+'</strong> · '+escape(relay.reading)+'</p>':'');
 }
 function explainObservatoryRepair(person,floor,retrying=false){
- const {question,explanation,misconception,hint}=floor.debrief;
+ const {question,explanation,misconception,alternative,hint}=floor.debrief;
  const report=observatoryState.reports[floor.index];
  const feedback=retrying?'<p class="report-feedback" role="status">'+hint+' Try again.</p>':'';
  showSpeech(person.name,question,'explaining',observatoryReportEvidence(floor)+feedback+
   '<div class="dialog-choices" id="topics"></div><hr><button id="dismiss">I’ll check my notes</button>',{focus:false});
  const choices=[[explanation,true],[misconception,false]];
  if(floor.index%2)choices.reverse();
+ choices.push([alternative,false]);
  for(const [text,correct] of choices){
   button($('topics'),text,()=>{
    if(!correct){explainObservatoryRepair(person,floor,true);return;}
@@ -2184,9 +2471,9 @@ function mapView(){
   $('show-valley-map').onclick=valleyMap;
   return;
  }
- if(roomIndex>=10&&room().planOwner===undefined){valleyMap();return;}
+ if(roomIndex>=10&&roomIndex<=15){valleyMap();return;}
  const levels=[
-  ['Grounds',[[0,140,64],[9,286,64]]],
+  ['Grounds',[[0,76,64],[9,220,64],[calibrationRoom,364,64]]],
   ['First floor',[[1,76,66],[7,220,66],[2,364,66]]],
   ['Second floor',[[6,220,39],[5,220,108],[3,76,177],[8,220,177],[4,364,177]]]
  ];
@@ -2205,8 +2492,9 @@ function mapView(){
   const chambers=nodes.filter(([i])=>revealed.has(i)).map(([i,x,y])=>{
    const current=i===roomIndex||plans[i]?.room===roomIndex;
    const half=58;
-   const name=rooms[i].name;
-   return '<g><title>'+rooms[i].name+'</title><rect x="'+(x-half)+'" y="'+(y-23)+'" width="'+(half*2)+'" height="46" rx="4" fill="'+(current?'#52684d':visited.has(i)?'#314b43':'#263a35')+'" stroke="'+(current?'#f1ce80':'#8a9d8a')+'" stroke-width="'+(current?3:2)+'"/><text x="'+x+'" y="'+(y+4)+'" text-anchor="middle" fill="#f4e8ca" font-size="11">'+name+'</text>'+(solved.has(i)?'<circle cx="'+(x+48)+'" cy="'+(y-14)+'" r="3" fill="#9bd6aa"/>':'')+'</g>';
+   const name=i===calibrationRoom?'Calibration Shed':rooms[i].name;
+   const complete=i===calibrationRoom?explorationState.complete:solved.has(i);
+   return '<g><title>'+rooms[i].name+'</title><rect x="'+(x-half)+'" y="'+(y-23)+'" width="'+(half*2)+'" height="46" rx="4" fill="'+(current?'#52684d':visited.has(i)?'#314b43':'#263a35')+'" stroke="'+(current?'#f1ce80':'#8a9d8a')+'" stroke-width="'+(current?3:2)+'"/><text x="'+x+'" y="'+(y+4)+'" text-anchor="middle" fill="#f4e8ca" font-size="11">'+name+'</text>'+(complete?'<circle cx="'+(x+48)+'" cy="'+(y-14)+'" r="3" fill="#9bd6aa"/>':'')+'</g>';
   }).join('');
   const stairs=nodes.filter(([i])=>revealed.has(i)).map(([i,x,y])=>links[i].filter(d=>!positions.has(d.to)&&rooms[d.to].planOwner===undefined).map(d=>{
    const v=d.dir==='north'?-1:1, end=Math.max(3,y+v*34);
@@ -2218,7 +2506,7 @@ function mapView(){
  $('dismiss').onclick=()=>{close();notebook();};
 }
 function discovery(){
- if(zone()==='plan'){openPlan(room().planOwner,true,nearbySource());return;}
+ if(zone()==='plan'){inspectResearch();return;}
  if(zone()==='lab'&&recovered.has(roomIndex)){openPlan(roomIndex);return;}
  if(zone()!=='console'){if(avatar&&!busy&&$('modal').hidden)say('Use Research to open your Field Notebook away from the apparatus.');return;}
  if(recovered.has(roomIndex)){openPlan(roomIndex);return;}
@@ -2260,7 +2548,18 @@ function arch(door){
   for(let i=0;i<3;i++)rect(xx,y-14+i*13,46,2,open?'#364c50':'#493a36');
  }
  if(!open)rect(x-4,y-5,8,8,'#ecac63');
-
+ if(open&&room().kind&&door.to!==plans[roomIndex]?.room&&repairFlash?.room===roomIndex&&!reducedMotion()){
+  const phase=Math.max(0,Math.min(1,(time-repairFlash.start)/.65));
+  const remaining=Math.round(44*(1-phase));
+  if(remaining){
+   const vertical=door.dir==='north'||door.dir==='south';
+   const left=vertical?x-20:door.dir==='west'?0:674;
+   const top=vertical?(door.dir==='north'?5:309):y-19;
+   const width=vertical?40:46;
+   rect(left,top,width,remaining,'#725743');
+   for(let edge=5;edge<width;edge+=8)rect(left+edge,top,2,remaining,'#9a7652');
+  }
+ }
 }
 function trailPosts(x,y){
  for(const offset of [-22,22]){
@@ -2270,15 +2569,40 @@ function trailPosts(x,y){
 function drawObservatoryMarker(){
  rect(534,159,16,8,arrived?'#87c1a6':'#c5925e');rect(538,160,8,2,'#efe298');
 }
+function carriedObject(x,y,load){
+ const top=y-32;
+ if(load==='+'||load==='−'){
+  rect(x-8,top,16,13,'#263438');
+  rect(x-6,top+2,12,9,load==='+'?'#ca8166':'#5bafae');
+  label(load,x,top+10,'#fff0ce',10);
+ }else if(load==='link'){
+  rect(x-11,top+3,22,7,'#664c42');
+  line(x-9,top+5,x+9,top+5,'#e8b76e',3);
+ }else{
+  const resistance=roomIndex===observatory.floors[1].room;
+  const suffix=resistance?' Ω':roomIndex===0?' N':' kg';
+  const body=resistance?'#9b6e48':roomIndex===0?'#596367':'#80634e';
+  rect(x-15,top+3,30,11,'#2b2c35');
+  rect(x-13,top+1,26,11,body);
+  rect(x-12,top+1,24,2,'#cfb48a');
+  label(load+suffix,x,top+11,'#fff3c8',9);
+ }
+}
+function emote(point,text,color){
+ rect(point.x-8,point.y-50,16,14,'#1d2532');
+ rect(point.x-6,point.y-49,12,12,'#f2dbad');
+ rect(point.x-3,point.y-37,4,3,'#f2dbad');
+ label(text,point.x,point.y-39,color,10);
+}
 function drawFigures(figures){
  const layers=figures.map(figure=>({depth:figure.point.y+12,figure}));
  if(foregroundArt.complete&&foregroundArt.naturalWidth){
   const regions=foregroundRegions[room().planOwner===undefined?roomIndex:16]||[];
-  for(const [sx,sy,width,height,x,y,base] of regions){
+  for(const [sx,sy,width,height,x,y,base,freestanding] of regions){
    const depth=base*2;
    const left=x*2,top=y*2,right=left+width*2,bottom=top+height*2;
    const coversFigure=figures.some(({point,load})=>point.y+12<depth&&point.x+16>left&&point.x-16<right&&point.y+14>top&&point.y-(load?40:22)<bottom);
-   if(coversFigure)layers.push({depth,region:[sx,sy,width,height,left,top]});
+   if(freestanding||coversFigure)layers.push({depth,region:[sx,sy,width,height,left,top]});
   }
  }
  layers.sort((a,b)=>a.depth-b.depth);
@@ -2290,12 +2614,10 @@ function drawFigures(figures){
    continue;
   }
   const {point,look,facing,load}=figure;
-  sprite(point.x,point.y,look,point.walking,facing);
+  sprite(point.x,point.y,look,point.walking,facing,load!==null&&load!==undefined);
   if(look.task)observatory.drawStudyWork(look,reducedMotion()?0:time,{rect});
-  if(load){
-   rect(point.x-14,point.y-40,28,14,'#80654d');
-   label(load+(roomIndex===0?' N':' kg'),point.x,point.y-29,'#fbdea3',10);
-  }
+  if(load!==null&&load!==undefined)carriedObject(point.x,point.y,load);
+
  }
 }
 function drawAdventureRoom(){
@@ -2330,8 +2652,19 @@ function drawAdventureRoom(){
   }
  }
  const backdrop=roomImages[roomIndex];
- if(backdrop?.complete&&backdrop.naturalWidth)ctx.drawImage(backdrop,0,0,720,360);
- if(!outside)for(const x of [64,560])lantern(x,49);
+ const hallLit=reported.has(1)&&reported.has(2);
+ if(roomIndex===7)drawSandstoneHall({rect,line},hallLit);
+ else if(backdrop?.complete&&backdrop.naturalWidth)ctx.drawImage(backdrop,0,0,720,360);
+ if(outside){
+  restoreNorthTrailGround(roomIndex,ctx,backdrop,meadowGroundArt);
+  drawTrailClearance(roomIndex,{rect});
+ }
+ const tint=room().planOwner!==undefined?'#717b5e':lower?'#597080':'#86644f';
+ drawBackdropDetails(roomIndex,{rect,line},outside?'outdoor':'castle',tint);
+ if(!outside)for(const x of [64,560]){
+  lantern(x,49);
+  if(hallLit&&roomIndex===7){lantern(x,53);rect(x-2,45,4,7,'#fff1b3');}
+ }
  if(!reducedMotion()){
   ctx.save();
   for(let i=0;i<9;i++){
@@ -2343,12 +2676,8 @@ function drawAdventureRoom(){
   }
   ctx.restore();
  }
- if(roomIndex===11){
-  for(let lane=0;lane<7;lane++){
-   const y=(lane*55+time*14)%360;
-   if(y<212||y>275)rect(342+lane%3*10,y,8,2,'#a8d5ce88');
-  }
- }
+ if(roomIndex===11)drawValleyLight({rect,line},reducedMotion()?0:time);
+
  for(const door of links[roomIndex]){
   if(roomIndex<10||roomIndex>=16)arch(door);
   else if(roomIndex===10&&door.dir==='south')trailPosts(625,309);
@@ -2360,11 +2689,19 @@ function drawAdventureRoom(){
  }
  if(room().kind){
   existingEquipment();
+  if(roomIndex===5&&!reducedMotion()){
+   const clearing=passed?1:animation?.win?Math.min(1,Math.max(0,time-animation.start-.23)/.75):0;
+   drawSteam({rect},177,100,time,clearing);
+   drawSteam({rect},540,100,time+.2,clearing);
+  }
   if(!currentLab()){
   rect(333,250,54,22,'#202a29');rect(335,246,50,16,'#93714b');
   rect(338,248,44,11,'#b28d5b');rect(343,249,19,8,'#334c45');
   for(const x of [368,374,380])rect(x,252,3,4,reported.has(roomIndex)?'#b9d9a0':passed?'#ffe2a1':'#cb9370');
   }
+ }
+ if(roomIndex===0&&passed){
+  rect(688,222,7,6,'#8ecea1');rect(689,223,4,2,'#e1f4b5');
  }
  if(roomIndex===6&&passed){
   rect(621,95,33,23,'#262f36');rect(624,98,27,10,'#80c7b0');
@@ -2385,21 +2722,33 @@ function drawAdventureRoom(){
    rect(477,110,33,16,'#75a992');for(let y=114;y<123;y+=4)rect(481,y,23,1,'#b4dbb6');
    rect(470,136,45,5,'#9ba18a');
   }
+  if(!recovered.has(room().planOwner))label('?',source.x,source.y-48,'#ffe2a1',15);
  }
- if(roomIndex===9){riverBridge();scienceLabs.draw(currentLab(),time,{rect,line,label},gardenBridge);}
+ if(roomIndex===9){
+  riverBridge();
+  const state=labArtState(9,gardenBridge);
+  scienceLabs.draw(currentLab(),time,{rect,line,label},gardenBridge,state);
+ }
+ if(roomIndex===9&&reported.has(9)){
+  rect(535,221,122,15,'#4b422e');
+  label('CALIBRATION SHED ›',596,232,'#fbdf9d',10);
+ }
  if(roomIndex===13)drawObservatoryMarker();
  if(valleyInvestigations.stations[roomIndex])valleyInvestigations.drawStation(roomIndex,{rect,line},fieldReports.has(roomIndex));
 }
 function draw(){
  ctx.imageSmoothingEnabled=false;
  const transition=roomTransition;
- const strength=transition?Math.max(0,1-Math.abs(transition.elapsed/passageHalf-1)):0;
+ const slide=transition?.switched&&transition.outgoing;
+ const progress=transition?Math.min(1,transition.elapsed/(2*passageHalf)):0;
+ const glide=progress*progress*(3-2*progress);
+ const strength=transition&&!transition.outgoing?1-Math.abs(2*progress-1):0;
  const ease=strength*strength*(3-2*strength);
- if(transition){
-  rect(0,0,720,360,'#0d1317');
+ let offset=null;
+ if(slide){
   const {dx,dy}=threshold[transition.door.dir];
-  const offset=transition.portal?0:Math.round((transition.switched?1:-1)*16*ease);
-  ctx.save();ctx.translate(dx*offset,dy*offset);
+  offset={x:Math.round(dx*720*(1-glide)),y:Math.round(dy*360*(1-glide)),dx,dy};
+  ctx.save();ctx.translate(offset.x,offset.y);
  }
  const inObservatory=observatory.inside(roomIndex);
  if(inObservatory){
@@ -2422,30 +2771,37 @@ function draw(){
   const phase=observatoryRepair?.room===roomIndex?elapsed/900:1;
   observatory.drawRoom(roomIndex,{rect,line,label},observatoryState,doors,still?0:time,phase);
  }
- else drawAdventureRoom();
+ else if(roomIndex===calibrationRoom){
+  exploration.draw(explorationState,{rect,line,label});
+  for(const door of links[roomIndex])arch(door);
+ }else drawAdventureRoom();
+ if(overlayIsOn(roomIndex)){
+  const art={rect,line,label};
+  if(inObservatory)observatory.compassOverlay(roomIndex,observatoryState,player,art);
+  else if(currentLab())scienceLabs.drawOverlay(currentLab(),time,art);
+ }
  questExtras.draw(roomIndex,curiosities,{rect,label});
  const figures=observatory.backgroundPeople(roomIndex).map(person=>({point:person,look:person,facing:person.facing}));
  for(const person of observatory.people(roomIndex,observatoryState))figures.push({point:person,look:person,facing:observatoryFacing.get(person.name)||'south'});
  const op=operatorPoint(), npc=roomIndex===9?null:talkPoint();
- if(op)figures.push({point:op,look:{coat:operatorCoats[roomIndex],hair:'#53484a'},facing:operatorFacing.get(roomIndex)||'south'});
+ if(op)figures.push({point:op,look:{sprite:roomIndex===0?'sol':undefined,coat:operatorCoats[roomIndex],hair:'#53484a'},facing:operatorFacing.get(roomIndex)||'south'});
  if(roomIndex===0&&solved.has(0))figures.push({point:mira,look:miraLook,facing:mira.facing||'south'});
+ if(roomIndex===calibrationRoom)figures.push({point:explorationState.mira,look:miraLook,facing:explorationState.mira.facing});
  if(npc&&npc!==mira)figures.push({point:npc,look:npc,facing:npc.facing||'south'});
  for(const student of students[roomIndex]||[])figures.push({point:student,look:student,facing:student.facing||'north'});
- if(avatar&&!onTitle)figures.push({point:player,look:avatars[avatar],facing:player.facing,load:currentLab()?.carry});
- drawFigures(figures);
  const labSetup=inObservatory?observatory.trialState(roomIndex,observatoryState):null;
- if(labSetup&&avatar&&!onTitle&&observatory.floorFor(roomIndex)?.room===roomIndex&&labSetup.carry!==null){
-  rect(player.x-18,player.y-37,36,13,'#263438');
-  label(observatory.carryLabel(labSetup.carry),player.x,player.y-27,'#f5d792',11);
- }
- if(avatar&&!onTitle&&roomIndex===observatory.floors[3].room&&labSetup.coil.compass&&(labSetup!==observatoryState||!observatory.done(observatoryState,3))){
+ const observatoryLoad=observatory.floorFor(roomIndex)?.room===roomIndex?labSetup?.carry:null;
+ if(avatar&&!onTitle)figures.push({point:player,look:avatars[avatar],facing:player.facing,load:currentLab()?.carry??observatoryLoad});
+ drawFigures(figures);
+ if(avatar&&!onTitle&&!overlayIsOn(roomIndex)&&roomIndex===observatory.floors[3].room&&labSetup.coil.compass&&(labSetup!==observatoryState||!observatory.done(observatoryState,3))){
   rect(player.x-8,player.y-39,16,15,'#263438');
   label('N',player.x,player.y-28,'#f5d792',10);
  }
- if(repairFlash?.room===roomIndex&&op&&!reducedMotion()){
-  const origin={x:op.x,y:op.y-29};
+ if(repairFlash?.room===roomIndex&&!reducedMotion()){
+  const lab=currentLab();
+  const origin=lab&&scienceLabs.repairMarker(lab);
   const phase=time-repairFlash.start;
-  if(phase>=0&&phase<1.1){
+  if(origin&&phase>=0&&phase<1.1){
    ctx.save();ctx.globalAlpha=1-phase/1.1;
    const glint='#ffe2a1';
    for(let i=0;i<5;i++){
@@ -2459,11 +2815,9 @@ function draw(){
  if(canMove()){
   const target=activeInteraction();
   const lead=observatory.reportLead(roomIndex,observatoryState);
-  const marker=lead||(op&&operatorPrompt()&&target?.kind!=='operator'?op:null);
-  if(marker){
-   rect(marker.x-7,marker.y-51,14,18,'#2d281c');
-   label('!',marker.x,marker.y-38,'#f7d891',14);
-  }
+  const needsOperator=op&&(!consulted.has(roomIndex)||needsReport(roomIndex));
+  const marker=lead||(needsOperator&&target?.kind!=='operator'?op:null);
+  if(marker)emote(marker,'!','#51402f');
   const nextControl=observatory.labStep(roomIndex,observatoryState)?.control;
   if(nextControl!==undefined&&target?.control?.id!==nextControl){
    const next=observatory.controls(roomIndex,observatoryState).find(control=>control.id===nextControl);
@@ -2474,10 +2828,7 @@ function draw(){
   }
   if(!observatory.studyAnswered(roomIndex,observatoryState)){
    const guide=observatory.people(roomIndex,observatoryState).find(person=>person.studyGuide);
-   if(guide){
-    rect(guide.x-7,guide.y-48,14,15,'#293947');
-    label('?',guide.x,guide.y-36,'#efcc81',13);
-   }
+   if(guide)emote(guide,'?','#51402f');
   }
   if(target){
    const {x,y}=target.point;
@@ -2486,8 +2837,10 @@ function draw(){
    rect(x-2,markerY+3,5,2,'#efcc81');
   }
  }
- if(transition){
+ if(offset){
   ctx.restore();
+  ctx.drawImage(slide,offset.x-offset.dx*720,offset.y-offset.dy*360);
+ }else if(ease){
   const shade=transition.portal?'22,31,51':'13,19,23';
   rect(0,0,720,360,'rgba('+shade+','+ease+')');
  }

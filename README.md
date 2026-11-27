@@ -1,12 +1,14 @@
 # Physics Quest: Mechanics Castle
 
+Current release **0.2.21**. See the [full changelog](CHANGELOG.md).
+
 **Physics Quest: Mechanics Castle** is a top-down science adventure designed for East Texas A&M University’s planetarium lobby and Physics Day. Choose Rowan or Sage, rescue Mira from a stalled lift, and use mechanics experiments to restore the castle, then follow its records to the Desert Observatory. The game runs in a browser and can be installed as a progressive web app (PWA) for portrait or landscape play on a phone or tablet.
 
 Built with HTML, CSS, and JavaScript. Canvas draws the rooms and characters using original pixel art.
 
 ## Play
 
-Open [Mechanics Castle](https://saturnaxis.github.io/PhysicsQuestRPG/). Choose an avatar, talk to the lift operator, and find the repair plan. At each station, read the evidence, predict a setting, and test it on the apparatus. Report your findings to the operator to open the next route.
+Open [Mechanics Castle](https://saturnaxis.github.io/PhysicsQuestRPG/). Choose an avatar and try the lift controls. Talk to the operator before using the Castle apparatus. If a trial fails, visit the indicated research room before retrying. Once the mechanism works, explain why to the operator to open the next route.
 
 | Action | Keyboard | Gamepad | Mouse or touch |
 | --- | --- | --- | --- |
@@ -20,7 +22,7 @@ Open [Mechanics Castle](https://saturnaxis.github.io/PhysicsQuestRPG/). Choose a
 ### Repair plans, readings, and progress
 
 - **Repair plans.** Inspect the drafting table, reference book, or computer in the research rooms for measurements and operating limits.
-- **Field Notebook.** Review evidence and equipment readings. The orchard and gulch investigations record their own results.
+- **Field Notebook.** Review evidence and equipment readings. The orchard and gulch investigations record their own results. The Exploration tab tracks Calibration Badges, Sprint Boots, Vector Goggles, and the optional Stargate II clue.
 - **Saved progress.** Continue your run from the title screen. Earned starting areas let you return to later parts of the game.
 - **Valley shortcut.** The service gate opens from Sandstone Pass and links it back to Alder Orchard through Service Gulch.
 
@@ -34,8 +36,9 @@ Open [Mechanics Castle](https://saturnaxis.github.io/PhysicsQuestRPG/). Choose a
 | Second floor | **Momentum transfer** | Adjust the incoming cart’s speed and observe where the coupled carts stop. |
 | Second floor | **Balancing bridge** | Move a counterweight and compare the torques around the pivot. |
 | Second floor | **Hydraulic gate** | Choose a piston and pressure that can raise the gate. |
-| Guardian chamber | **Flywheel Guardian** | Use signed momentum readings to stop the guardian on its left and right passes. |
+| Guardian chamber | **Flywheel Guardian** | Use signed momentum readings and wait for LAUNCH. Switch carts when the Guardian shifts gears, or enable relaxed timing in the Menu. |
 | Castle grounds | **East Garden** | Choose a crank position that produces enough torque to lower the drawbridge. |
+| Castle grounds | **Garden Calibration Shed** | Compare sled travel on two surfaces and use Mira’s help to trip the weighted plate. |
 | Valley road | **Alder Orchard** | Compare centripetal acceleration on two tracks at the same speed. |
 | Desert foothills | **Service Gulch** | Pull the turntable weights inward and observe the change in angular speed. |
 | Observatory Floor 1 | **Charge Laboratory / Field Study** | Ask Mira to hold the safety plate, carry charge cells to the sockets, and use the field probe. |
@@ -43,12 +46,12 @@ Open [Mechanics Castle](https://saturnaxis.github.io/PhysicsQuestRPG/). Choose a
 | Observatory Floor 3 | **Induction Lab / Coil Archive** | Launch the magnet carriage through two timing gates. Compare both gears on the same coil and reach 6 V. |
 | Observatory Floor 4 | **Magnetic Dome / Magnetics Study** | Record compass readings for both current directions and align the tracking relay west. |
 
-East Garden, Alder Orchard, and Service Gulch are optional detours. The main valley road leads to the observatory. The observatory opens in the ground-floor telescope lobby. Take the north stairs to the first lab. Follow the prompts at each apparatus. The adjoining study rooms let you predict, test, compare, and discuss a reading. Successful repairs are recorded in the Field Notebook. Return to the telescope after all four repairs, tune to the beacon, and share your expedition report with Vela on Nacre. The lobby’s south exit returns you to the valley.
+East Garden, the Garden Calibration Shed, Alder Orchard, and Service Gulch are optional detours. The main valley road leads to the observatory. The observatory opens in the ground-floor telescope lobby. Take the north stairs to the first lab. Follow the prompts at each apparatus. The adjoining study rooms let you predict, test, compare, and discuss a reading. Successful repairs are recorded in the Field Notebook. Return to the telescope after all four repairs, tune to the beacon, and share your expedition report with Vela on Nacre. The lobby’s south exit returns you to the valley.
 
 ## Install on a phone or tablet
 
 1. Open the deployed HTTPS site. In **Android Chrome**, choose **Install app** or **Add to Home screen**. In **Safari on iPhone or iPad**, choose **Share → Add to Home Screen** and enable **Open as Web App** if shown.
-2. Launch from the home-screen icon. Touch controls sit below the game in portrait and beside it in landscape. Tap **Touch** to switch between always-visible and automatic controls. Tap **More** if you need to expand a room message.
+2. Launch from the home-screen icon. Touch controls sit below the game in portrait and beside it in landscape. Tap **Touch** to switch between always-visible and automatic controls. By default, touch devices show the controls, while desktop or kiosk layouts use automatic mode. In automatic mode, touch or pen restores the controls, and keyboard or gamepad input hides them again. Tap **More** if you need to expand a room message.
 3. For offline play, launch online and wait for **Offline ready**. Turn on airplane mode and relaunch to check the core game cache. Music tracks cache as they play.
 
 When updating an installed copy, open the game online and choose **Update game** when it appears.
@@ -78,9 +81,7 @@ node tests/pwa-launch.cjs
 | --- | --- |
 | **Build with GitHub Actions** | Under **Settings → Pages**, set **Source** to **GitHub Actions**. Push the repository to `main` or select **Run workflow** under **Actions → Deploy Mechanics Castle**. The workflow builds `docs/` and publishes it to GitHub Pages. |
 
-Merge the package’s `src/`, `tools/`, `tests/`, `.github/`, and README into the existing checkout. The included `docs/` is ready for local preview. The Actions workflow rebuilds it from source, and the repository ignores it by default. If the checkout instead publishes from a branch’s `/docs` folder, commit the included `docs/` to keep that publishing method.
-
-v41 applies the second quality pass to the supplied v40 source. It retains the repair animations, measurement comparisons, and follow-up dialogue from v40.
+Merge the ZIP’s contents into the existing Mechanics Castle checkout, including `.github/`, `VERSION`, and `CHANGELOG.md`. Preserve the checkout’s Git history. The included `docs/` is ready for local preview. The Actions workflow rebuilds it from source, and the repository ignores it by default. If the checkout instead publishes from a branch’s `/docs` folder, commit the included `docs/` to keep that publishing method.
 
 ## Kiosk and audio
 
@@ -113,13 +114,15 @@ Music starts at 10% volume and can be adjusted or muted from the title and pause
 | `src/manifest.webmanifest`, `src/sw.js`, `tools/build-pages.py` | PWA metadata and generation of the versioned offline cache |
 | `.github/workflows/pages.yml` | Build and deployment on GitHub Pages |
 
-### Recent versions
+## Recent changes
 
-- **v08–v09** moved contextual actions onto the existing Interact button and improved the landscape D-pad and room messages.
-- **v10–v11** removed repeated instructions from room objectives and interaction feedback.
-- **v12–v13** added the Pages build script and the GitHub Actions deployment workflow.
-- **v14** consolidated the repository around one source tree and removed the analytics snippet.
-- **v15** opened Signal Hall and added the compass relay investigation at the Desert Observatory.
-- **v16** expanded the observatory into a telescope lobby and four laboratory floors with study rooms. It also widened portraitless dialogue.
-- **v17** moved the four Observatory repairs into the rooms, added Mira and the Observatory crew, and opened the Signal Chamber and Nacre stargate.
-- **v41** keeps study predictions and follow-up answers separate, supports both induction run orders, pins study readings, improves touch and gamepad controls, and adds the Nacre spectrum match.
+- **[0.2.21](CHANGELOG.md#0221)** Repaint three world scenes, animate room travel and repair cues, and add a two-setup Guardian finale with relaxed timing and a Phase 2 checkpoint.
+- **[0.2.20](CHANGELOG.md#0220)** Package the current game for GitHub Pages, adopt area-based release numbers, and split the release history into a changelog and a ten-entry README summary.
+- **[0.2.19](CHANGELOG.md#0219)** Require an explanation of why each of the eight Castle repairs worked. Incorrect answers provide a hint and allow another try.
+- **[0.2.18](CHANGELOG.md#0218)** Lower reset controls in six Castle rooms and require research after a failed trial. Successful intermediate steps and completed repairs can proceed directly.
+- **[0.2.17](CHANGELOG.md#0217)** Move the full trees off the north paths, add an original meadow texture, and make locked apparatus name the research room and door.
+- **[0.2.16](CHANGELOG.md#0216)** Widen key outdoor routes, put repair indicators beside apparatus controls, and add outdoor and indoor scenery.
+- **[0.2.15](CHANGELOG.md#0215)** Keep the playfield size fixed. Put short readings beside actions and open longer messages in a bottom overlay.
+- **[0.2.14](CHANGELOG.md#0214)** Prevent directions from clipping in the status panel and make overflow readable on short screens.
+- **[0.2.13](CHANGELOG.md#0213)** Fix Skip opening during and after both Castle text crawls.
+- **[0.2.12](CHANGELOG.md#0212)** Add the Garden Calibration Shed, Mira’s interlock task, Calibration Badges, Sprint Boots, Vector Goggles, and the Stargate II clue.

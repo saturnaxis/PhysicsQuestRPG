@@ -9,6 +9,7 @@ const scienceLabs = (() => {
   {name:'Stone',coefficient:.27,color:'#819584'},
   {name:'Rough',coefficient:.48,color:'#9c785e'}
  ];
+ const sledTrack={start:189,pixelsPerMetre:62};
  const frictionZone=[2.6,3.6], momentumZone=[1.7,2.3];
  const momentumTrack={start:170,contact:355,gap:35,pixelsPerMetre:62};
  const inRange=(value,[low,high])=>value>=low&&value<=high;
@@ -16,8 +17,8 @@ const scienceLabs = (() => {
  const rack=masses.map((mass,index)=>({mass,x:165+index*65,y:229}));
  const plate={x:535,y:248};
  const resetConsole=room=>room===9
-  ?{x:348,y:276,width:66,height:24}
-  :{x:360,y:room===0||room===2?292:266,width:76,height:20};
+  ?{x:348,y:296,width:66,height:24}
+  :{x:360,y:room===6?296:292,width:76,height:20};
  const equipment={
   liftRack:[{x:175,y:232,weight:400},{x:243,y:232,weight:680}],
   liftHook:{x:500,y:241},liftLever:{x:322,y:224},
@@ -31,7 +32,7 @@ const scienceLabs = (() => {
  const goals={
   0:'Carry a test counterweight to the hook, then pull the lift lever.',
   5:'Route the pump to one piston, then set and test the pressure at the pump dial.',
-  6:'Couple a cart, then walk to a launcher. Check the guardian’s direction before each pass.',
+  6:'Read the Guardian’s momentum, couple a matching cart, and launch opposite its motion when the gate reads LAUNCH.',
   9:'Slide the grip along the crank, then turn it to test the setting.',
   1:'Launch the same sled on each surface. Find the lane that stops it in the gold zone.',
   2:'Carry a test mass to the gold scale. Use the accelerator’s readings to calibrate it.',
@@ -41,7 +42,7 @@ const scienceLabs = (() => {
  const hints={
   lift:['The heavier side of the pulley starts moving down. The other side rises.','Choose a counterweight heavier than the occupied 520 N platform.','Hang the 680 N counterweight on the hook and pull the lift lever.'],
   hydraulic:['At the same pressure, more piston area produces more force.','The larger piston gains 20 N for every kPa of pressure. The gate needs 600 N.','Route to the 200 cm² piston and set the pump to at least 30 kPa.'],
-  brake:['Momentum has both a size and a direction. Read the guardian’s direction before launching.','Use the launcher on the opposite side of the track with a cart carrying 10 kg·m/s.','Couple the 5 kg cart. Launch from the right if the guardian moves right, or from the left if it moves left.'],
+  brake:['Read the Guardian’s signed momentum before launching.','Choose a cart with equal momentum magnitude and launch opposite the Guardian’s motion.','The 5 kg cart carries 10 kg·m/s. The 2 kg cart carries 6 kg·m/s. Match the current phase.'],
   crank:['Moving the grip farther out increases torque at the same push.','Multiply 50 N by the grip distance in metres. You need at least 18 N·m.','A grip distance of 40 cm produces 20 N·m and lowers the bridge.'],
   friction:['A rougher surface brings the sled to a stop sooner.','If it went too far, try a lane with more friction. If it stopped short, try less.','Compare the rough and smooth runs. The middle-friction lane stops between them.'],
   mass:['At the same force, a lighter mass accelerates faster.','Divide 12 N by the target acceleration of 3 m/s².','12 ÷ 3 = 4. Carry the 4 kg block to the plate.'],
@@ -72,8 +73,8 @@ const scienceLabs = (() => {
   return lab;
  }
  function snapshot(lab){
-  const {carry,load,calibrated,values,piston,cartIndex,brakes,heading,attempts,lastTrial,lastFeedback}=lab;
-  return {carry,load,calibrated,values:{...values},piston,cartIndex,brakes,heading,attempts:{...attempts},lastTrial,lastFeedback};
+  const {carry,load,calibrated,values,piston,cartIndex,brakes,heading,attempts,lastTrial}=lab;
+  return {carry,load,calibrated,values:{...values},piston,cartIndex,brakes,heading,attempts:{...attempts},lastTrial};
  }
  function restore(room,data,now){
   const lab=make(room);
@@ -93,7 +94,6 @@ const scienceLabs = (() => {
   for(const key of Object.keys(hints)){
    if(Number.isInteger(data.attempts?.[key])&&data.attempts[key]>0)lab.attempts[key]=Math.min(1000,data.attempts[key]);
   }
-  if(typeof data.lastFeedback==='string'&&data.lastFeedback.length<=600)lab.lastFeedback=data.lastFeedback;
   const trial=data.lastTrial;
   if(room===1&&Number.isInteger(trial?.index)&&surfaces[trial.index]){
    lab.lastTrial={index:trial.index};
@@ -107,9 +107,15 @@ const scienceLabs = (() => {
  }
  function pistonForce(kPa,index){return kPa*equipment.pistons[index].area/10;}
  function liftDifference(weight){return weight-520;}
- function brakeMomenta(cartIndex,side,heading){
+ function guardianMomentum(heading,brakes){return heading*(brakes===0?10:6);}
+ function guardianCycle(now,brakes,relaxed=false){
+  const period=brakes===0?2.4:1.9;
+  const position=(now%period+period)%period/period;
+  return {position,open:relaxed||position>=.20&&position<=.76};
+ }
+ function brakeMomenta(cartIndex,side,heading,brakes=0){
   const {mass,speed}=equipment.carts[cartIndex];
-  const cart=mass*speed*side, guardian=10*heading;
+  const cart=mass*speed*side, guardian=guardianMomentum(heading,brakes);
   return {cart,guardian,total:cart+guardian};
  }
  function crankTorque(cm){return 50*cm/100;}
@@ -163,7 +169,7 @@ const scienceLabs = (() => {
     ...(lab.trial?['Last run after contact · '+number(lab.trial.coupledSpeed)+' m/s and '+number(lab.trial.distance)+' m']:[])];
    case 4:return ['Fixed load · 1 m left of the pivot','Movable load · '+values.torque.toFixed(1)+' m right of the pivot'];
    case 5:return ['Pump setting · '+values.hydraulic+' kPa',lab.piston===null?'Connect one of the piston ports to check its area.':'Connected piston · '+equipment.pistons[lab.piston].area+' cm²'];
-   case 6:return [lab.brakes===2?'Guardian stopped':'Guardian moving '+(lab.heading===1?'right':'left'),
+   case 6:return [lab.brakes===2?'Guardian stopped':'Phase '+(lab.brakes+1)+' · Guardian momentum '+guardianMomentum(lab.heading,lab.brakes)+' kg·m/s (right is positive)',
     ...(lab.cartIndex===null?['Couple a cart to check its launch speed.']:['Coupled cart launch speed · '+equipment.carts[lab.cartIndex].speed+' m/s'])];
    case 9:return ['Grip distance · '+values.crank+' cm from the axle'];
    default:return [];
@@ -171,6 +177,7 @@ const scienceLabs = (() => {
  }
  function goal(lab){
   if(lab.room===2&&lab.calibrated)return 'The test mass is calibrated. Balance the 12 N rightward pull at the force dial.';
+  if(lab.room===6&&lab.brakes===1)return 'Phase 2 · The Guardian is moving left at 6 kg·m/s. Match the new momentum and wait for LAUNCH.';
   return goals[lab.room];
  }
  function rackWeights(lab,complete=false){
@@ -201,7 +208,8 @@ const scienceLabs = (() => {
   if(lab.room===1)return list.concat(surfaces.map((surface,i)=>add('lane-'+i,{x:165+i*150,y:223},'Launch on '+surface.name.toLowerCase(),i)));
   if(lab.room===3)return list.concat(add('momentum',{x:323,y:223},'Adjust launch speed'));
   if(lab.room===4)return list.concat(add('torque',{x:323,y:223},'Move counterweight'));
-  if(lab.calibrated)return list.concat(add('force',{x:537,y:223},'Adjust the left pull'));
+  list.push(add('force',{x:537,y:223},'Adjust the left pull'));
+  if(lab.calibrated)return list;
   list.push(add('plate',plate,lab.carry?'Place '+lab.carry+' kg on plate':lab.load?'Lift the test mass':'Inspect pressure plate'));
   return list.concat(rackWeights(lab)
    .map(block=>add('mass-'+block.mass,block,'Lift '+block.mass+' kg',block.mass)));
@@ -214,7 +222,137 @@ const scienceLabs = (() => {
   const key=lab.adjust, config=controls[key], value=lab.values[key];
   return config.label+' · '+value+' '+config.units;
  }
- function draw(lab,now,paint,complete=false){
+ function overlayName(id){
+  return ({0:'Force arrows',1:'Motion dots',3:'Motion dots',4:'Lever arm',5:'Force arrows',9:'Lever arm'})[id];
+ }
+ function drawOverlay(lab,now,{rect,line,label}){
+  const room=lab.room, gold='#ffdf93', teal='#91f3e2', shade='#182334';
+  const name=overlayName(room);
+  if(!name)return;
+  const caption=(text,x,y)=>{
+   rect(x-text.length*3.6-6,y-13,text.length*7.2+12,17,shade);
+   label(text,x,y,gold,12);
+  };
+  const vertical=(x,y,value,color)=>{
+   const tip=y-Math.sign(value)*Math.min(62,Math.abs(value)*.074);
+   if(Math.abs(tip-y)<3)return;
+   const tail=tip+Math.sign(value)*7;
+   line(x,y,x,tip,color,3);
+   line(x,tip,x-5,tail,color,2);
+   line(x,tip,x+5,tail,color,2);
+  };
+  if(room===0&&lab.load){
+   vertical(301,154,-520,gold);
+   vertical(529,118,-lab.load,teal);
+   caption('Platform · 520 N',245,69);
+   caption('Counterweight · '+lab.load+' N',506,69);
+   return;
+  }else if(room===5&&lab.piston!==null){
+   const force=pistonForce(lab.values.hydraulic,lab.piston);
+   const x=equipment.pistons[lab.piston].x;
+   vertical(x-24,146,force,teal);
+   vertical(x+24,146,-600,gold);
+   caption(force+' N up · 600 N required',360,69);
+   return;
+  }else if(room===1||room===3){
+   const run=lab.trial;
+   if(run){
+    const elapsed=Math.max(0,now-run.started);
+    const duration=room===1?run.speed/run.deceleration:run.approachTime+run.coupledSpeed;
+    for(let t=0;t<=Math.min(duration,elapsed);t+=.2){
+     let x,y;
+     if(room===1){
+      x=sledTrack.start+(run.speed*t-.5*run.deceleration*t*t)*sledTrack.pixelsPerMetre;
+      y=111+run.index*40;
+     }else{
+      const {start,contact,gap,pixelsPerMetre}=momentumTrack;
+      const after=t-run.approachTime;
+      x=after<0?start+run.speed*t*pixelsPerMetre:contact-gap+(run.coupledSpeed*after-.5*after*after)*pixelsPerMetre;
+      y=158;
+     }
+     rect(x-2,y-2,5,5,shade);rect(x-1,y-1,3,3,teal);
+    }
+   }
+   caption(run?'Motion dots · every 0.2 s':'Motion dots · launch to measure',359,69);
+   return;
+  }else if(room===4||room===9){
+   const x=room===4?300:436, y=room===4?108:188;
+   const distance=room===4?lab.values.torque:lab.values.crank;
+   const end=room===4?x+63*distance:443+distance/2;
+   line(x,y,end,y,teal,2);
+   for(const mark of [x,end])line(mark,y-4,mark,y+4,teal,2);
+   caption((room===4?distance.toFixed(1)+' m':distance+' cm')+' from pivot',360,69);
+   return;
+  }
+  caption(room===0&&!lab.load?'Hang a counterweight':room===5&&lab.piston===null?'Connect a piston':name,359,69);
+ }
+
+ // Shared machine fittings for the Castle rigs and Observatory workbenches.
+ function fittings({rect,line,label}){
+  const ink='#202735', metal='#637a80', brass='#d1a66f';
+  function foot(x,y,width=42){
+   rect(x-width/2,y-4,width,13,ink);
+   rect(x-width/2+2,y-5,width-4,4,metal);
+   rect(x-width/2+4,y+1,3,3,brass);
+   rect(x+width/2-7,y+1,3,3,brass);
+  }
+  function lever(x,y,engaged=false){
+   foot(x,y);
+   rect(x-9,y-4,18,5,'#a38562');
+   const direction=engaged?1:-1;
+   line(x,y-4,x+direction*10,y-19,ink,7);
+   line(x,y-5,x+direction*10,y-19,brass,4);
+   rect(x+direction*10-5,y-22,10,6,engaged?'#8ac9b1':'#ba624e');
+   rect(x+direction*10-4,y-22,8,2,'#f2ce8b');
+  }
+  function socket(x,y,filled=false){
+   foot(x,y,32);
+   rect(x-10,y-11,20,13,brass);
+   rect(x-8,y-9,16,9,ink);
+   if(filled)rect(x-6,y-7,12,5,'#82bca8');
+  }
+  function rack(x,y,width=46){
+   rect(x-width/2+3,y-2,5,12,ink);rect(x+width/2-8,y-2,5,12,ink);
+   rect(x-width/2,y-4,width,8,'#6a4b3f');
+   rect(x-width/2+1,y-5,width-2,3,'#ac825a');
+   for(const dx of [-1,1])rect(x+dx*(width/2-6)-1,y-2,3,2,'#ebca8e');
+  }
+  function dial(x,y,fraction,readout){
+   foot(x,y,54);
+   rect(x-15,y-25,30,22,ink);
+   rect(x-13,y-27,26,24,'#a17c59');
+   rect(x-10,y-24,20,19,'#ebd3a4');
+   for(const dx of [-7,0,7])rect(x+dx,y-22,1,4,'#705b4c');
+   const angle=Math.PI*(1.14+.72*Math.max(0,Math.min(1,fraction)));
+   line(x,y-10,x+9*Math.cos(angle),y-10+9*Math.sin(angle),'#743d46',2);
+   rect(x-2,y-11,4,4,ink);
+   if(readout)label(readout,x,y+19,'#fae7ba',10);
+  }
+  function lamp(x,y,state){
+   const [symbol,color]=({
+    locked:['×','#f2aa81'],ready:['○','#f2ce82'],working:['…','#b3dce3'],complete:['✓','#b4e7ba']
+   })[state];
+   rect(x-8,y-8,16,15,ink);
+   rect(x-6,y-7,12,2,brass);
+   label(symbol,x,y+4,color,14);
+  }
+  return {foot,lever,socket,rack,dial,lamp};
+ }
+
+ function repairMarker(lab){
+  const points={
+   0:{x:equipment.liftLever.x+28,y:equipment.liftLever.y-8},
+   1:{x:193+(lab.trial?.index??1)*150,y:215},
+   2:{x:566,y:215},
+   3:{x:353,y:215},
+   4:{x:353,y:215},
+   5:{x:equipment.pump.x+32,y:equipment.pump.y-8},
+   6:{x:611,y:261},
+   9:{x:equipment.crank.x+31,y:equipment.crank.y}
+  };
+  return points[lab.room];
+ }
+ function draw(lab,now,paint,complete=false,state=complete?'complete':'ready'){
   const {rect,line,label}=paint;
   const dark='#243638', edge='#56706d', light='#f6dfac', gold='#eec879', green='#a4da95';
   const base=(x,y,w,h)=>{rect(x,y,w,h,dark);rect(x,y,w,3,edge);};
@@ -222,27 +360,39 @@ const scienceLabs = (() => {
    rect(x-17,y-14,34,27,'#715743');rect(x-15,y-12,30,5,'#ba986a');
    label(mass+' kg',x,y+6,light,12);
   };
-  const button=(x,y,text,width=76,height=20)=>{
-   rect(x-width/2,y-height/2,width,height,'#3a4d48');
-   rect(x-width/2+1,y-height/2,width-2,2,'#849182');
-   label(text,x,y+4,light,11);
-  };
+  const art=fittings(paint);
   const arrow=(x,y,direction,length,color)=>{
    if(length<2)return;
    const end=x+direction*length;
    line(x,y,end,y,color,4);line(end,y,end-direction*7,y-5,color,2);line(end,y,end-direction*7,y+5,color,2);
   };
-  const dial=(point,text)=>button(point.x,point.y,text);
  if(lab.room===0){
-  for(const item of rackWeights(lab))dial(item,item.weight+' N');
-  dial(equipment.liftHook,lab.load?lab.load+' N on hook':'Lift hook');
-  dial(equipment.liftLever,'Lift lever');
+  for(const item of equipment.liftRack){
+   art.rack(item.x,item.y,48);
+   if(!rackWeights(lab).includes(item))continue;
+   rect(item.x-16,item.y-18,32,16,'#272f3a');
+   rect(item.x-14,item.y-16,28,13,'#65767c');
+   rect(item.x-9,item.y-20,18,4,'#a3b0ad');
+   label(item.weight+' N',item.x,item.y-6,light,10);
+  }
+  art.socket(equipment.liftHook.x,equipment.liftHook.y,Boolean(lab.load));
+  line(500,229,500,238,light,2);line(500,238,506,238,light,2);
+  art.lever(equipment.liftLever.x,equipment.liftLever.y,state==='working'||complete);
  }else if(lab.room===5){
-  for(const [i,piston] of equipment.pistons.entries())dial(piston,lab.piston===i?'✓ Routed':'Route');
-  dial(equipment.pump,lab.values.hydraulic+' kPa');
+  for(const [i,piston] of equipment.pistons.entries()){
+   const routed=lab.piston===i;
+   line(piston.x,204,piston.x,219,routed?'#75c6b3':edge,5);
+   art.lever(piston.x,piston.y,routed);
+  }
+  art.dial(equipment.pump.x,equipment.pump.y,lab.values.hydraulic/40,lab.values.hydraulic+' kPa');
  }else if(lab.room===6){
-  for(const [i,cart] of equipment.carts.entries())dial(cart,(lab.cartIndex===i?'✓ ':'')+cart.mass+' kg cart');
-  for(const launcher of equipment.launchers)dial(launcher,launcher.side===1?'Left launch':'Right launch');
+  for(const [i,cart] of equipment.carts.entries()){
+   art.rack(cart.x,cart.y);
+   rect(cart.x-16,cart.y-16,32,10,i===lab.cartIndex?'#8fc3a9':'#aa8158');
+   for(const dx of [-11,9])rect(cart.x+dx,cart.y-6,5,4,dark);
+   label(cart.mass+' kg',cart.x,cart.y-7,light,10);
+  }
+  for(const launcher of equipment.launchers)art.lever(launcher.x,launcher.y,state==='working');
  }else if(lab.room===9){
   const point=equipment.crank, grip=443+lab.values.crank/2;
   line(436,207,468,194,edge,4);
@@ -251,7 +401,7 @@ const scienceLabs = (() => {
  }else{
  base(112,75,493,126);
   if(lab.room===1){
-   const travel=62, start=189;
+   const {pixelsPerMetre:travel,start}=sledTrack;
    for(const [i,surface] of surfaces.entries()){
     const y=101+i*40;
     rect(start-21,y-13,385,26,surface.color);
@@ -262,7 +412,8 @@ const scienceLabs = (() => {
     const x=start+(run?run.speed*t-.5*run.deceleration*t*t:0)*travel;
     rect(x-9,y-6,18,12,'#384340');rect(x-8,y-6,16,3,run?.win?green:gold);
     if(run&&t>=run.speed/run.deceleration)label(number(run.distance)+' m',548,y+5,light,11);
-    button(165+i*150,223,surface.name);
+    art.lever(165+i*150,223,state==='working'&&Boolean(run));
+    label(surface.name,165+i*150,244,light,10);
    }
   }else if(lab.room===2){
    const fixed=12,value=lab.values.force,net=force(value);
@@ -274,11 +425,11 @@ const scienceLabs = (() => {
    arrow(390,144,1,fixed*6,gold);
    arrow(330,144,-1,value*6,net===0?green:'#8ec7c2');
    label(value+' N left',243,173,light,12);label(fixed+' N right',474,173,light,12);
-   for(const item of rackWeights(lab))block(item.x,item.y,item.mass);
+   for(const item of rackWeights(lab)){art.rack(item.x,item.y);block(item.x,item.y,item.mass);}
    rect(plate.x-26,plate.y-14,52,27,lab.calibrated?'#5d845f':'#ad925b');
    label('PLATE',plate.x,plate.y+28,light,11);
    if(lab.load)block(plate.x,plate.y,lab.load);
-   if(lab.calibrated)button(537,223,'Force dial');
+   art.dial(537,223,value/20);
   }else if(lab.room===3){
    const {start,contact,gap,pixelsPerMetre}=momentumTrack;
    const run=lab.trial?.key==='momentum'?lab.trial:null;
@@ -296,7 +447,7 @@ const scienceLabs = (() => {
    wagon(incoming,'4 kg');wagon(contact+rolled,'2 kg');
    label('Launch '+lab.values.momentum+' m/s',205,180,light,12);
    if(coupled)label('Coupled '+number(run.coupledSpeed)+' m/s',464,180,light,12);
-   button(323,223,'Launch dial');
+   art.dial(323,223,(lab.values.momentum-1)/3);
   }else{
    const value=lab.values.torque,imbalance=torque(value);
    const pivot=300,y=145,scale=63,tilt=Math.max(-.16,Math.min(.16,imbalance/170));
@@ -316,9 +467,11 @@ const scienceLabs = (() => {
    for(const x of [pivot,weightX])line(x,95,x,103,gold,1);
    rect(middle-29,77,58,17,'#18282a');
    label(value.toFixed(1)+' m',middle,90,light,13);
-   button(323,223,'Slide dial');
+   art.dial(323,223,(value-.5)/3);
   }
   }
+  const marker=repairMarker(lab);
+  art.lamp(marker.x,marker.y,lab.room===2&&!lab.calibrated?'locked':state);
   if(!complete){
    const {x,y,width,height}=resetConsole(lab.room);
    if(lab.room===9){
@@ -327,9 +480,12 @@ const scienceLabs = (() => {
     rect(left+2,top,width-4,4,'#b39159');
     rect(left+8,y-3,6,7,'#eeb76e');
     label('Reset',x+5,y+4,light,11);
-   }else button(x,y,'Reset',width,height);
+   }else{
+    art.lever(x-14,y,false);
+    label('Reset',x+16,y+4,light,10);
+   }
   }
  }
 
- return {snapshot,restore,title,goals,equipment,instruments,instrumentByRoom,requiredReadings,measurements,make,goal,targets,rackWeights,resetConsole,adjust,readout,result,number,acceleration,friction,collision,force,netForceLabel,torque,pistonForce,liftDifference,brakeMomenta,crankTorque,draw};
+ return {snapshot,restore,title,goals,equipment,instruments,instrumentByRoom,requiredReadings,measurements,make,goal,targets,rackWeights,resetConsole,adjust,readout,result,number,acceleration,friction,collision,force,netForceLabel,torque,pistonForce,liftDifference,guardianMomentum,guardianCycle,brakeMomenta,crankTorque,draw,repairMarker,overlayName,drawOverlay,fittings};
 })();

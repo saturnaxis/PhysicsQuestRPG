@@ -99,5 +99,8 @@ const questExtras=(()=>{
   if(id==='crate')changed=curiosities.has(id);
   render();
  }
- return {known,point,draw,list,show};
+ function names(found){
+  return Object.entries(entries).filter(([id])=>found.has(id)).map(([,entry])=>entry.name);
+ }
+ return {known,point,draw,list,show,names};
 })();

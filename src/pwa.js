@@ -72,9 +72,13 @@ syncScreenButton();
 
 const playfield = document.querySelector('.frame');
 const touchMode = document.getElementById('touch-mode');
-let autoTouch = false;
+const prefersTouch = window.matchMedia('(any-pointer: coarse)').matches;
+let autoTouch = !prefersTouch;
 let touchInUse = false;
-try { autoTouch = localStorage.getItem('physics-quest-touch-mode') === 'auto'; } catch {}
+try {
+  const mode = localStorage.getItem('physics-quest-touch-mode');
+  if (mode === 'auto' || mode === 'on') autoTouch = mode === 'auto';
+} catch {}
 
 function syncTouchMode() {
   playfield.dataset.controlsHidden = autoTouch && !touchInUse ? 'true' : 'false';
@@ -89,13 +93,15 @@ touchMode.addEventListener('click', () => {
   syncTouchMode();
 });
 window.addEventListener('pointerdown', event => {
-  if (!autoTouch || event.pointerType !== 'touch' || touchInUse) return;
+  if (!autoTouch || !['touch', 'pen'].includes(event.pointerType) || touchInUse) return;
   touchInUse = true;
   syncTouchMode();
 }, { passive: true });
-window.addEventListener('keydown', () => {
+function hideAutomaticControls() {
   if (!autoTouch || !touchInUse) return;
   touchInUse = false;
   syncTouchMode();
-});
+}
+window.addEventListener('keydown', hideAutomaticControls);
+window.addEventListener('physicsquest-gamepad-input', hideAutomaticControls);
 syncTouchMode();

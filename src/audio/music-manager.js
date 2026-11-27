@@ -21,6 +21,9 @@ class BackgroundMusic {
  constructor() {
   this.volume = 10;
   this.muted = false;
+  this.dialogueBlips = true;
+  this.lastCue = new Map();
+  this.fanfare = null;
   this.duck = 1;
   this.context = null;
   this.master = null;
@@ -36,6 +39,7 @@ class BackgroundMusic {
    const preferences = JSON.parse(localStorage.getItem(BackgroundMusic.settingsKey));
    if (Number.isFinite(preferences?.volume)) this.volume = Math.max(0, Math.min(100, preferences.volume));
    this.muted = preferences?.muted === true;
+   this.dialogueBlips = preferences?.dialogueBlips !== false;
   } catch {}
  }
 
@@ -43,45 +47,126 @@ class BackgroundMusic {
   this.volume = Math.max(0, Math.min(100, Math.round(volume)));
   this.muted = muted;
   this.updateMaster();
-  try { localStorage.setItem(BackgroundMusic.settingsKey, JSON.stringify({volume:this.volume, muted:this.muted})); } catch {}
+  this.savePreferences();
  }
 
- // Reserved for a future fanfare bus. This never changes the saved preference.
+ setDialogueBlips(enabled) {
+  this.dialogueBlips = enabled;
+  this.savePreferences();
+ }
+
+ savePreferences() {
+  const {volume, muted, dialogueBlips} = this;
+  try { localStorage.setItem(BackgroundMusic.settingsKey, JSON.stringify({volume, muted, dialogueBlips})); } catch {}
+ }
+
+ // Duck the soundtrack without changing the effect level or saved preference.
  setDucking(multiplier = 1) {
   this.duck = Math.max(0, Math.min(1, multiplier));
   this.updateMaster();
  }
 
  updateMaster() {
-  if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume / 100 * this.duck, this.context.currentTime, .025);
+  if (!this.master) return;
+  const level = this.muted ? 0 : this.volume / 100;
+  this.master.gain.setTargetAtTime(level * this.duck, this.context.currentTime, .025);
+  this.effects.gain.setTargetAtTime(level, this.context.currentTime, .025);
  }
 
- playDiscoveryCue() { this.playCue(523.25, 659.25, .16); }
- playDoorCue() { this.playCue(220, 293.66, .09); }
- playRepairCue() { this.playCue(659.25, 880, .18); }
+ get canPlayEffects() {
+  return !this.muted && this.volume > 0 && this.active && this.context?.state === 'running';
+ }
+
+ allowCue(name, interval) {
+  if (!this.canPlayEffects) return false;
+  const now = this.context.currentTime;
+  if (now - (this.lastCue.get(name) ?? -Infinity) < interval) return false;
+  this.lastCue.set(name, now);
+  return true;
+ }
+
+ playDiscoveryCue() { this.tone('triangle', 523, 784, .16, .16); }
+ playDoorCue() {
+  if (this.allowCue('latch', .11)) this.tone('square', 210, 112, .065, .07);
+ }
+ playDialCue() {
+  if (this.allowCue('dial', .055)) this.tone('square', 410, 260, .033, .035);
+ }
+ playDialogueCue(name) {
+  if (!this.dialogueBlips || !this.allowCue('dialogue', .095)) return;
+  const pitch = 260 + (name.codePointAt(0) || 0) % 9 * 22;
+  this.tone('triangle', pitch, pitch * .92, .034, .035);
+ }
+ playRepairCue() {
+  if (!this.allowCue('repair', .55)) return;
+  this.setDucking(.52);
+  [523, 659, 784, 1047].forEach((pitch, index) => {
+   const voice = this.tone('triangle', pitch, pitch, .19, index===3?.24:.1, index*.09);
+   if (index===3 && voice) this.fanfare = voice;
+  });
+  if (!this.fanfare) this.setDucking();
+ }
  playObservatoryCue(gate = false) {
-  this.playCue(440, 659.25, .12);
-  this.playCue(783.99, gate ? 1174.66 : 880, .14, .11);
+  this.tone('triangle', 440, 659.25, .12, .18);
+  this.tone('triangle', 783.99, gate ? 1174.66 : 880, .14, .23, .11);
  }
- playBlockCue() { this.playCue(146.83, 92.5, .08); }
- playPlateCue() { this.playCue(392, 523.25, .10, .22); }
+ playBlockCue() { this.tone('triangle', 147, 74, .08, .09); }
+ playPlateCue() { this.tone('triangle', 392, 523.25, .1, .12, .13); }
+ playCouplingCue() {
+  if (!this.allowCue('cart', .08)) return;
+  this.tone('triangle', 154, 57, .16, .11);
+  this.noise(.075,.07,870);
+ }
+ playHydraulicCue() {
+  if (this.allowCue('hydraulic', .22)) this.noise(.36,.20,1550);
+ }
 
- playCue(firstTone, secondTone, level, delay = 0) {
+ tone(type, first, second, level, duration, delay = 0) {
+  if (!this.canPlayEffects || !this.context.createOscillator) return null;
+  const voice = this.context.createOscillator();
+  const start = this.context.currentTime + delay;
+  voice.type = type;
+  voice.frequency.setValueAtTime(first,start);
+  voice.frequency.linearRampToValueAtTime(second,start+duration*.72);
+  this.playVoice(voice,start,level,duration);
+  return voice;
+ }
+
+ noise(duration, level, frequency) {
   const context = this.context;
-  if (this.muted || !this.volume || !this.active || context?.state !== 'running' || !context.createOscillator) return;
-  const oscillator = context.createOscillator();
-  const envelope = context.createGain();
-  const now = context.currentTime + delay;
-  oscillator.frequency.setValueAtTime(firstTone, now);
-  oscillator.frequency.setValueAtTime(secondTone, now + .09);
-  envelope.gain.setValueAtTime(0, now);
-  envelope.gain.linearRampToValueAtTime(level, now + .02);
-  envelope.gain.linearRampToValueAtTime(0, now + .20);
-  oscillator.connect(envelope);
-  envelope.connect(this.master);
-  oscillator.onended = () => { oscillator.disconnect(); envelope.disconnect(); };
-  oscillator.start(now);
-  oscillator.stop(now + .21);
+  const voice = context.createBufferSource();
+  if (!this.noiseBuffer) {
+   this.noiseBuffer = context.createBuffer(1, Math.ceil(.4 * context.sampleRate), context.sampleRate);
+   const samples = this.noiseBuffer.getChannelData(0);
+   for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+  }
+  voice.buffer = this.noiseBuffer;
+  const filter = context.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = frequency;
+  voice.connect(filter);
+  this.playVoice(voice,context.currentTime,level,duration,filter);
+ }
+
+ playVoice(voice, start, level, duration, filter) {
+  const envelope = this.context.createGain();
+  const release = start+duration;
+  envelope.gain.setValueAtTime(0,start);
+  envelope.gain.linearRampToValueAtTime(level,start+Math.min(.016,duration/3));
+  envelope.gain.linearRampToValueAtTime(0,release);
+  (filter || voice).connect(envelope);
+  envelope.connect(this.effects);
+  voice.onended = () => {
+   voice.disconnect();
+   filter?.disconnect();
+   envelope.disconnect();
+   if (this.fanfare === voice) {
+    this.fanfare = null;
+    this.setDucking();
+   }
+  };
+  voice.start(start);
+  voice.stop(release);
  }
 
  unlock() {
@@ -93,8 +178,12 @@ class BackgroundMusic {
     try { this.context = new Context(); } catch { return; }
    }
    this.master = this.context.createGain();
-   this.master.gain.value = this.muted ? 0 : this.volume / 100;
+   this.effects = this.context.createGain();
+   const level = this.muted ? 0 : this.volume / 100;
+   this.master.gain.value = level * this.duck;
+   this.effects.gain.value = level;
    this.master.connect(this.context.destination);
+   this.effects.connect(this.context.destination);
   }
   if (this.context.state === 'running') { this.reconcile(); return; }
   this.context.resume().then(() => this.reconcile()).catch(() => {});
@@ -208,6 +297,8 @@ class BackgroundMusic {
  exit() {
   this.active = false;
   this.request++;
+  this.fanfare = null;
+  this.setDucking();
   for (const voice of [this.current, this.retiring]) {
    if (!voice) continue;
    voice.source.onended = null;

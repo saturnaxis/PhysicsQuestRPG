@@ -29,6 +29,7 @@ const observatory = (() => {
     labels:['One eastward contribution','Two eastward contributions'],
     explanation:'At the probe, the field points away from the west positive cell and toward the east negative cell. Both contributions point east and add.',
     misconception:'The west positive cell and east negative cell make equal fields that cancel because their charges have opposite signs.',
+    alternative:'Only the west cell contributes. The east cell changes the starting position of the particles.',
     hint:'Compare where the particles landed. The short mark and the collector are in the same direction from the source. Which way did each cell’s field point?'
    }
   },
@@ -42,6 +43,7 @@ const observatory = (() => {
     labels:['Breaker open','Breaker closed'],
     explanation:'The bridge and breaker completed the loop. Dividing the fixed 12 V by 6 Ω gives 2 A.',
     misconception:'The resistor set the current to 2 A on its own, even if the breaker was open.',
+    alternative:'Closing the breaker increased the battery voltage while the resistance stayed fixed.',
     hint:'Look at the breaker and bridge settings. An open loop gives the charge no path around the circuit. For a complete loop, compare the meter to I = V/R.'
    }
   },
@@ -55,6 +57,7 @@ const observatory = (() => {
     labels:['Slow pass','Fast pass'],
     explanation:'The fast pass made the same flux change per turn in less time. Halving the transit time doubled the voltage magnitude.',
     misconception:'The fast gear increased the flux change between the same two markers. The transit time had no effect on the voltage.',
+    alternative:'The fast gear added turns to the selected coil bank while the carriage was moving.',
     hint:'Compare the transit times and the sizes of the voltages. The sign shows travel direction. The same coil and markers give the same flux change.'
    }
   },
@@ -68,6 +71,7 @@ const observatory = (() => {
     labels:['Reference dock · Current A','Reference dock · Current B'],
     explanation:'Reversing the current reversed the coil field. The compass’s north-seeking tip pointed west at the relay dock, matching its target.',
     misconception:'The current reversal made the field stronger without changing its direction. The compass still pointed east.',
+    alternative:'The heading changed because the compass was carried to a different dock, regardless of the current.',
     hint:'Compare east and west at the same reference dock. Then check which heading at the relay dock matched its target.'
    }
   }
@@ -82,28 +86,28 @@ const observatory = (() => {
   {
    prediction:'Before you move the probe, where do you expect the field to be stronger?',
    question:'Where was the local field stronger on the conductive paper?',
-   choices:['Where equal-voltage lines were closer together.','Where the voltage was highest.'],
+   choices:['Where equal-voltage lines were closer together.','Where the voltage was highest.','Where the voltage was closest to zero.'],
    answer:0,
    feedback:'Closer lines mean the voltage changes more over the same distance. Try comparing the spacing and field strength on the same sheet.'
   },
   {
    prediction:'Predict what the ammeter will show if you open the breaker and keep the same resistor.',
    question:'What happens to current when the breaker opens?',
-   choices:['It stays the same because the resistor is still connected.','It drops to zero because the loop is broken.'],
+   choices:['It stays the same because the resistor is still connected.','It drops to zero because the loop is broken.','It reverses direction through the resistor.'],
    answer:1,
    feedback:'The open switch breaks the current path. Compare both breaker settings with the same resistor.'
   },
   {
    prediction:'Try the same coil bank at both speeds. Which pass do you expect to make the larger voltage pulse?',
    question:'What changes when the magnet crosses the same two gates faster?',
-   choices:['The voltage pulse gets larger in magnitude.','The voltage pulse stays the same.'],
+   choices:['The voltage pulse gets larger in magnitude.','The voltage pulse stays the same.','The voltage pulse gets smaller in magnitude.'],
    answer:0,
    feedback:'The same change in magnetic flux takes less time. Hold the coil bank and travel direction fixed to compare the two speeds.'
   },
   {
    prediction:'Watch the compass’s north tip. Where do you expect it to point after you reverse the current?',
    question:'What does reversing the coil current do to the compass?',
-   choices:['The north tip keeps pointing the same way.','The north tip swings to the opposite side.'],
+   choices:['The north tip keeps pointing the same way.','The north tip swings to the opposite side.','The needle points at right angles to its previous heading.'],
    answer:1,
    feedback:'Reversing the current reverses the coil field. Watch the north tip turn to follow it.'
   }
@@ -552,12 +556,12 @@ const observatory = (() => {
   state=trialState(id,state);
   const floor=floorFor(id);
   const {index}=floor;
-  const cue=labStep(id,state)?.control;
   const screen=(text,color=teal)=>label(text,359,151,color,13);
-  const pad=(x,y,text,lit=false)=>{
-   rect(x-27,y-17,54,25,'#263441');
-   rect(x-24,y-15,48,5,lit?teal:'#9b835f');
-   if(text)label(text,x,y+19,'#e5d4a9',10);
+  const hardware=scienceLabs.fittings({rect,line,label});
+  const mount=(kind,x,y,text,engaged=false)=>{
+   if(kind==='rack')hardware.rack(x,y);
+   else hardware[kind](x,y,engaged);
+   if(text)label(text,x,y+20,'#e5d4a9',9);
   };
   if(index===0){
    const {west,east,held,single}=state.charge;
@@ -587,17 +591,18 @@ const observatory = (() => {
    }
    label('SHORT MARK',434,166,'#e5d4a9',9);
    label('COLLECTOR',470,202,'#e5d4a9',9);
-   pad(...charge.check,'PULSE',open);
+   mount('lever',...charge.check,'',Boolean(pulse));
    for(const [x,value,name] of [[charge.west,west,'WEST SOCKET'],[charge.east,east,'EAST SOCKET']]){
-    pad(x,227,name,Boolean(value));
+    mount('socket',x,227,name,Boolean(value));
     label(value||'·',x,227,value==='−'?teal:warm,18);
    }
    for(const [x,value] of [[275,'+'],[446,'−']]){
-    pad(x,281,value==='+'?'POSITIVE CELL':'NEGATIVE CELL');
+    mount('rack',x,281,'');
     if(![west,east,state.carry].includes(value))label(value,x,281,gold,18);
    }
-   if(state.carry!==null)pad(charge.rack,292,'RETURN');
-   pad(plateX,plateY,'SAFETY PLATE',open);
+   if(state.carry!==null)mount('rack',charge.rack,292,'RETURN');
+   hardware.foot(plateX,plateY,54);
+   hardware.lamp(plateX,plateY-4,open?'ready':'locked');
 
   }else if(index===1){
    const {resistor,linked,on}=state.circuit;
@@ -616,25 +621,25 @@ const observatory = (() => {
     rect(bridgeX+24+phase,238,7,4,color);
     rect(594-24-phase,171,7,4,color);
    }
-   pad(...circuit.bridge,'BRIDGE',linked);
+   mount('socket',...circuit.bridge,'',linked);
    line(bridgeX,bridgeY-11,bridgeX,linked?bridgeY+7:bridgeY-3,linked?color:gold,3);
    if(!linked)rect(bridgeX-2,bridgeY+4,5,5,gold);
-   pad(...circuit.socket,'RESISTOR SOCKET',Boolean(resistor));
+   mount('socket',...circuit.socket,'',Boolean(resistor));
    label(resistor?resistor+' Ω':'·',...circuit.socket,gold,12);
-   pad(...circuit.breaker,'BREAKER',on);
+   mount('lever',...circuit.breaker,'',on);
    line(switchX-17,switchY+8,switchX+18,switchY+(on?8:-5),color,3);
-   pad(...circuit.meter,'AMMETER',Boolean(amps));
-   label(amps+' A',meterX,meterY,color,12);
+   hardware.dial(...circuit.meter,amps/3,amps+' A');
+   hardware.lamp(meterX+25,meterY-6,amps===2?'complete':amps?'working':'locked');
    screen(amps===2?'SUPPLY READY':'TARGET 2 A',color);
    label('12 V · '+(resistor?resistor+' Ω':'NO RESISTOR'),359,166,'#f4d5a5',10);
-   pad(...circuit.link,'BRIDGE LINK');
+   mount('rack',...circuit.link,'');
    if(!linked&&state.carry!=='link')rect(circuit.link[0]-8,circuit.link[1]-4,16,6,gold);
    for(const [i,n] of [4,6,12].entries()){
     const x=259+i*81;
-    pad(x,286,n+' Ω');
+    mount('rack',x,286,n+' Ω');
     if(![state.carry,resistor].includes(n))label('▰',x,286,warm,15);
    }
-   if(state.carry!==null)pad(circuit.rack,306,'RETURN');
+   if(state.carry!==null)mount('rack',circuit.rack,306,'RETURN');
   }else if(index===2){
    const {gear,turns:bank,end,trials}=state.induction;
    rect(rail.west-14,231,rail.east-rail.west+28,32,'#262e3d');
@@ -648,10 +653,10 @@ const observatory = (() => {
    const x=pass?.x??rail[end];
    rect(x-13,240,27,15,'#b26763');rect(x+1,240,13,15,'#6576a1');
    label('N',x-7,251,'#fff0cf',9);label('S',x+8,251,'#fff0cf',9);
-   pad(...induction.gear,'GEAR '+gear.toUpperCase(),true);
-   pad(...induction.bank,bank+' TURNS',true);
+   mount('lever',...induction.gear,gear.toUpperCase(),gear==='fast');
+   mount('lever',...induction.bank,bank+' TURNS',bank===20);
    for(const side of ends){
-    pad(rail[side],298,practice?.room===id?'RESET':'');
+    mount('lever',rail[side],298,'',!pass&&side===end);
     if(!pass&&side===end)label('RUN',rail[side],272,gold,11);
    }
    const reading=pass?.voltage??0;
@@ -662,7 +667,7 @@ const observatory = (() => {
    drawVoltageTrace(line);
   }else{
    const {polarity,compass,seen,dock}=state.coil;
-   pad(...coil.switch,'CURRENT '+(polarity>0?'A':'B'),polarity<0);
+   mount('lever',...coil.switch,'CURRENT '+(polarity>0?'A':'B'),polarity<0);
    line(coil.reference[0],coil.reference[1],coil.dock[0],coil.dock[1],'#8493ad',2);
    for(let x=312;x<406;x+=12){
     line(x-4,248,x+5,223,'#a986a6',4);
@@ -671,11 +676,11 @@ const observatory = (() => {
     line(tipX,tipY,tipX+4,tipY+polarity*7,'#e2c5db',2);
    }
    screen(done(state,3)?'TRACKING RELAY LOCKED':'COIL CURRENT '+(polarity>0?'A':'B'));
-   if(!compass)pad(...coil.compass,'COMPASS');
+   if(!compass)mount('rack',...coil.compass,'');
    if(!compass)label('N',...coil.compass,gold,12);
-   pad(...coil.reference,'REFERENCE',seen===3);
-   pad(...coil.dock,'RELAY',dock===-1);
-   pad(...coil.align,cue==='align'||practice?.room===id?'LOCK':'',dock===-1);
+   mount('socket',...coil.reference,'REFERENCE',seen===3);
+   mount('socket',...coil.dock,'RELAY',dock===-1);
+   mount('lever',...coil.align,'',dock===-1);
    label('A '+(seen&1?'EAST':'—')+'  /  B '+(seen&2?'WEST':'—'),359,168,gold,10);
    if(dock!==null){
     arrow(line,coil.dock[0],coil.dock[1]-5,dock*19,gold);
@@ -909,9 +914,12 @@ const observatory = (() => {
   for(const x of [168,293,419,540])rect(x,14,4,70,'#81949a');
   rect(160,79,391,10,floor?.tint||'#748386');
   if(floor)labArchitecture(art,floor,side);
+  if(id===lobby)drawObservatoryLobbyBackdrop(art,online);
+  if(id!==offworld)drawBackdropDetails(id,art,'observatory',floor?.tint);
 
   if(id===offworld){
    sceneryOffworld(art);
+   drawBackdropDetails(id,art,'nacre');
    for(let i=0;i<8;i++){
     const drift=(t*.15+i*.19)%1;
     rect((99+i*87+drift*24)%700,118+i*11%41-drift*11,2,2,'#d4b7d799');
@@ -935,6 +943,10 @@ const observatory = (() => {
     rect(307,129,103,32,'#203641');
     equipment(id,art,state,t,repairPhase);
     repairedScenery(art,floor.index,online,repairPhase);
+    if(online){
+     const control=[charge.check,circuit.breaker,induction.bank,coil.align][floor.index];
+     scienceLabs.fittings(art).lamp(control[0]+28,control[1]-10,'complete');
+    }
    }
    rect(417,123,14,11,'#182930');
    rect(419,125,10,7,online?teal:gold);
@@ -1470,10 +1482,22 @@ const observatory = (() => {
   pass={start,end,direction:start==='west'?1:-1,bank:trial.turns,gear:trial.gear,elapsed:0,x:rail[start],voltage:0};
   return {text:'Carriage running in '+trial.gear+' gear.'};
  }
+ function compassOverlay(id,saved,player,art){
+  const {compass,polarity}=trialState(id,saved).coil;
+  if(id!==magneticLab||!compass)return;
+  const {rect,line,label}=art;
+  const onAxis=Math.abs(player.y-coil.reference[1])<=22&&player.x>=coil.reference[0]-32&&player.x<=coil.dock[0]+32;
+  const x=player.x,y=Math.max(72,player.y-46);
+  rect(x-38,y-12,76,22,'#182334');
+  if(!onAxis){label('FIND AXIS',x,y+3,gold,10);return;}
+  arrow(line,x,y,polarity*21,teal);
+  label('N',x+polarity*30,y+3,gold,11);
+ }
+
  function useMagnetic(control,trial){
   if(control==='compass'){
    trial.compass=true;
-   return {text:'Compass picked up.'};
+   return {text:'Compass picked up. Open it with Research away from the docks to show the live needle.'};
   }
   if(control==='polarity'){
    trial.polarity*=-1;
@@ -1532,5 +1556,5 @@ const observatory = (() => {
   return useMagnetic(control,state.coil);
  }
  return {lobby,secret,offworld,entrance,entry,telescopeSpawn,exit,exteriorSpawn,technician,floors,rooms,passages,inside,floorFor,fresh,restore,done,confirmed,awaitingReport,ready,nextFloor,leadName,locked,objective,blocks,instrument,labStep,reportLead,moveStudyProbe,
-  controls,people,backgroundPeople,drawStudyWork,dispatch,studies,studyAnswered,useControl,togglePractice,trialState,record,reportEvidence,followUp,observationsHTML,reaction,escape,demonstration,beacon,returnPart,cancelTrials,updateTrial,carryLabel,drawRoom,frame,showIntro,showReveal,panel};
+  controls,people,backgroundPeople,drawStudyWork,dispatch,studies,studyAnswered,useControl,togglePractice,trialState,record,reportEvidence,followUp,observationsHTML,reaction,escape,demonstration,beacon,returnPart,cancelTrials,updateTrial,carryLabel,drawRoom,frame,showIntro,showReveal,panel,compassOverlay};
 })();
