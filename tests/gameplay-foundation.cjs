@@ -48,7 +48,7 @@ const scope=vm.createContext({
  key:(key,repeat=false,type='keydown')=>events.get(type).forEach(fn=>fn({key,repeat,preventDefault(){}})),
  flush:()=>timers.shift()()
 });
-for(const script of ['docs/audio/music-manager.js','docs/gameplay.js','docs/science-labs.js','docs/portraits.js','docs/scenery.js','docs/valley-investigations.js','docs/study-labs.js','docs/field-events.js','docs/observatory.js','docs/quest-extras.js','docs/exploration.js'])
+for(const script of ['docs/audio/music-manager.js','docs/gameplay.js','docs/prop-atlas.js','docs/science-labs.js','docs/portraits.js','docs/scenery.js','docs/valley-investigations.js','docs/study-labs.js','docs/field-events.js','docs/observatory.js','docs/quest-extras.js','docs/exploration.js'])
  vm.runInContext(fs.readFileSync(script,'utf8'),scope);
 vm.runInContext(html.split('<script>')[1].split('</script>')[0],scope);
 vm.runInContext(`
@@ -249,11 +249,17 @@ use('weight-400');assert.equal(currentLab().carry,400);use('lift-hook');use('lif
 assert.ok(loadProgress().run.researchRequired.includes(0),'the trial is spent before the animation ends');
 flush();
 assert.equal(solved.has(0),false);assert.match($('feedback').textContent,/120 N.*does not rise/);
+assert.equal($('trial-reading').textContent,'400 N vs 520 N · Δ 120 N');
+assert.equal($('trial-reading').hidden,false);
+assert.equal(scienceLabs.liftDifference(520),0);
+assert.ok(scienceLabs.equipment.liftRack.some(item=>item.weight===520));
+assert.equal(researchPrediction(0).answer,2);
 assert.equal($('modal').hidden,true);
 use('reset');assert.equal(currentLab().load,400);
 use('lift-lever');assert.ok(!busy);
 assert.match($('operator-prompt').textContent,/Trial failed.*Lift service shed/);
 clearSession();resumeRun();
+assert.equal($('trial-reading').textContent,'400 N vs 520 N · Δ 120 N');
 assert.ok(researchRequired.has(0));
 use('lift-lever');assert.ok(!busy);
 research();
@@ -282,6 +288,7 @@ use('weight-680');
 walkStraight({x:243,y:249},{x:500,y:249});
 assert.equal(activeInteraction()?.control?.id,'lift-hook');
 key('e');use('lift-lever');flush();assert.ok(solved.has(0));assert.ok(mira.walking);
+assert.equal($('trial-reading').textContent,'680 N vs 520 N · Δ 160 N');
 assert.ok(canStand(175,232),'removed lift counterweight does not block the path');
 report(0);
 door('east',9);
@@ -1180,9 +1187,9 @@ for(const id of [0,10]){
  canvasImages.length=0;canvasSprites.length=0;
  drawFigures([]);
  const trees=canvasSprites.filter((_,i)=>canvasImages[i]==='art/foreground.png');
- assert.equal(trees.length,2);
+ assert.equal(trees.length,id===0?1:2);
  for(const [sx,sy,width,height,x,y,scaledWidth,scaledHeight] of trees){
-  assert.deepEqual([sx,sy,width,height,scaledWidth,scaledHeight],[68,0,34,40,68,80]);
+  assert.deepEqual([sx,sy,width,height,scaledWidth,scaledHeight],[68,id===0?97:0,34,40,68,80]);
   assert.ok(x>=0&&x+scaledWidth<=720&&y>=0&&y+scaledHeight<=360);
  }
 }
@@ -1192,6 +1199,62 @@ for(const [row,facing] of ['east','west','south','north'].entries()){
  sprite(180,250,avatars.Rowan,false,facing,true);
  assert.equal(canvasSprites[0].slice(0,4).join(','),[78,row*32,26,32].join(','));
 }
+for(const name of ['Inez','Teo','Track operator Fen','Workshop lead Lin','Dispatcher Pax','Bridge operator Uma','Pump operator Dev','Guardian technician Kit','Electrostatics apprentice Orin']){
+ const file='art/'+name.split(' ').at(-1).toLowerCase()+'-directions.png';
+ assert.ok(hasPortrait(file));
+ canvasImages.length=0;canvasSprites.length=0;
+ sprite(180,250,{name},false,'west',true);
+ assert.equal(canvasImages[0],file);
+ assert.equal(canvasSprites[0].slice(0,4).join(','),'78,32,26,32');
+}
+canvasImages.length=0;
+sprite(180,250,{sprite:'student-rose'});
+assert.equal(canvasImages[0],'art/student-rose-directions.png');
+for(const [status,healthy,shifted] of [[0,false,false],[1,false,true],[2,true,true]]){
+ canvasImages.length=0;canvasSprites.length=0;
+ guardianArt(360,158,healthy,shifted);
+ assert.equal(canvasImages.join(','),'art/guardian.png,art/guardian-wheel.png,art/guardian-visor.png');
+ assert.equal(canvasSprites[2][0],status*16);
+}
+canvasImages.length=0;
+cartArt('cart',145,155,31);
+cartArt('receiver',355,153,40);
+assert.equal(canvasImages.join(','),'art/cart.png,art/receiver.png');
+assert.ok(hasPortrait('art/props.png'));
+canvasImages.length=0;canvasSprites.length=0;
+hydraulicArt({index:0,win:true,pressure:30,force:600},1,scienceLabs.make(5),true);
+const propDraws=canvasSprites.filter((_,i)=>canvasImages[i]==='art/props.png');
+for(const name of ['pressureGauge','cylinderWide','cylinderNarrow','pistonWide','pistonNarrow']){
+ assert.ok(propDraws.some(args=>args.slice(0,4).join(',')===propAtlasRegions[name].join(',')),name+' uses the atlas');
+}
+const released=exploration.fresh();
+const shedProps=[], shedLabels=[];
+const captureShed={rect(){},line(){},label(text){shedLabels.push(text);},prop(name){shedProps.push(name);return true;}};
+exploration.draw(released,captureShed,true);
+for(const name of ['oiled','mat','shedPlate','ballastSled'])assert.ok(shedProps.includes(name));
+assert.ok(shedLabels.includes('5 kg'));
+assert.ok(!shedLabels.includes('OILED BOARDS')&&!shedLabels.includes('ROUGH MAT'));
+shedProps.length=0;
+exploration.draw(exploration.restore({x:528,mass:6,held:true,joined:true},true),captureShed,true);
+assert.ok(shedProps.includes('shedPlateLive')&&shedProps.includes('interlockLive'));
+const visualBrake={start:20,side:1};
+updateBrakeImpact(visualBrake,20+brakeImpactAt-.01);
+assert.equal(brakeImpact(visualBrake,20),null);
+const collisionAt=20+brakeImpactAt+.001;
+updateBrakeImpact(visualBrake,collisionAt);
+assert.equal(visualBrake.hitStop,3);
+updateBrakeImpact(visualBrake,collisionAt+.016);
+updateBrakeImpact(visualBrake,collisionAt+.032);
+assert.ok(brakeImpact(visualBrake,collisionAt+.032).hold);
+updateBrakeImpact(visualBrake,collisionAt+.048);
+assert.ok(!brakeImpact(visualBrake,collisionAt+.048).hold);
+assert.ok(Math.abs(visualBrake.pause-.048)<1e-6);
+motionPreference.matches=true;
+const quietBrake={start:20,side:1};
+updateBrakeImpact(quietBrake,collisionAt);
+assert.equal(quietBrake.hitStop,undefined);
+assert.equal(brakeImpact(visualBrake,collisionAt),null);
+motionPreference.matches=false;
 const gaugeNeedle=fraction=>{
  const lines=[];
  scienceLabs.fittings({rect(){},line(...args){lines.push(args)},label(){}}).dial(100,100,fraction);

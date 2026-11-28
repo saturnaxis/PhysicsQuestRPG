@@ -426,11 +426,11 @@ const observatory = (() => {
     ['Can I return to the Observatory?','Yes. The south stargate will take you back to the Signal Chamber.']])]
  };
  const studyCrews=[
-  [[132,159,'#537d81','#362d41','probe'],[590,163,'#9a795b','#352d34','notes']],
-  [[145,161,'#846955','#342e38','meter'],[577,162,'#64776b','#3d3431','notes']],
-  [[139,162,'#99664f','#302b3e','coil'],[581,160,'#747899','#3f3331','notes']],
-  [[144,161,'#72769d','#362e37','coil'],[576,163,'#738b69','#3d312d','meter']]
- ].map(crew=>crew.map(([x,y,coat,hair,task])=>({x,y,coat,hair,task,facing:'north'})));
+  [[132,159,'student-teal','probe'],[590,163,'student-olive','notes']],
+  [[145,161,'student-rose','meter'],[577,162,'student-olive','notes']],
+  [[139,162,'student-rose','coil'],[581,160,'student-plum','notes']],
+  [[144,161,'student-plum','coil'],[576,163,'student-olive','meter']]
+ ].map(crew=>crew.map(([x,y,sprite,task])=>({x,y,sprite,task,facing:'north'})));
  function backgroundPeople(id){
   const floor=floorFor(id);
   return floor?.side===id ? studyCrews[floor.index] : [];
@@ -484,7 +484,12 @@ const observatory = (() => {
   line(x+dx,y,x+dx-Math.sign(dx)*7,y-5,color,2);
   line(x+dx,y,x+dx-Math.sign(dx)*7,y+5,color,2);
  }
- function gateArt({rect,line},x,y,active,t){
+ function gateArt({rect,line,pool,shadow},x,y,active,t){
+  shadow?.(x,y+2,43,7);
+  if(active){
+   pool?.(x,y+5,82,20,'#a187f2',.84);
+   pool?.(x,y,57,13,'#7adfe7',.8);
+  }
   const edge='#806579',trim=active?'#b6abda':'#927e72';
   if(active){
    rect(x-54,y-28,108,29,'#67cdd42a');
@@ -509,29 +514,31 @@ const observatory = (() => {
   }
   for(const dx of [-33,27]){rect(x+dx,y-12,7,15,trim);rect(x+dx+2,y-11,3,5,active?teal:warm);}
  }
- function sceneryOffworld({rect,line,label}){
-  rect(0,0,720,360,'#15213b');
-  for(let i=0;i<68;i++){
-   const x=(61+i*97)%720,y=(19+i*71)%169;
-   rect(x,y,i%5===0?3:2,2,i%5===0?'#edcfb3':'#7895aa');
-  }
-  for(let y=-29;y<31;y+=3){
-   const w=Math.sqrt(32*32-y*y);
-   rect(532-w,72+y,2*w,3,y<-3?'#d8a5aa':'#865f90');
-  }
-  for(let i=0;i<22;i++){
-   const x=i*37,y=126+(i*47)%26;
-   line(x-37,187,x,y,'#4d537f',5);line(x,y,x+36,187,'#4d537f',5);
+ function sceneryOffworld({rect,line,label,shadow},painted){
+  if(!painted){
+   rect(0,0,720,360,'#15213b');
+   for(let i=0;i<68;i++){
+    const x=(61+i*97)%720,y=(19+i*71)%169;
+    rect(x,y,i%5===0?3:2,2,i%5===0?'#edcfb3':'#7895aa');
+   }
+   for(let y=-29;y<31;y+=3){
+    const w=Math.sqrt(32*32-y*y);
+    rect(532-w,72+y,2*w,3,y<-3?'#d8a5aa':'#865f90');
+   }
+   for(let i=0;i<22;i++){
+    const x=i*37,y=126+(i*47)%26;
+    line(x-37,187,x,y,'#4d537f',5);line(x,y,x+36,187,'#4d537f',5);
+   }
+   rect(0,175,720,185,'#465377');
+   for(let y=184;y<360;y+=30)for(let x=4;x<720;x+=39){
+    rect(x+(y%8)*2,y,34,24,(x+y)%4?'#4d5c7b':'#586885');
+   }
   }
   for(const [x,y,h] of [[400,171,36],[428,169,58],[451,168,39],[470,172,26]]){
    rect(x-8,y-h,17,h,'#635d81');rect(x-5,y-h-4,11,6,'#bda3b8');
    rect(x-2,y-h+6,5,10,'#ead0b5');rect(x-3,y-h+21,7,12,'#a599b9');
   }
   for(const x of [386,410,434,458,482])line(x,171,x+12,159,'#a595b8',3);
-  rect(0,175,720,185,'#465377');
-  for(let y=184;y<360;y+=30)for(let x=4;x<720;x+=39){
-   rect(x+(y%8)*2,y,34,24,(x+y)%4?'#4d5c7b':'#586885');
-  }
   rect(37,124,646,47,'#424c67');
   rect(40,125,640,4,'#797795');
   rect(268,128,179,4,'#b89db4');
@@ -544,6 +551,7 @@ const observatory = (() => {
   line(359,207,625,285,'#a999b2',3);
   rect(346,193,26,4,'#a999b2');
   const {x,y}=archiveDesk;
+  shadow?.(x,y-4,32,5);
   rect(x-28,y-15,56,11,'#2d344e');rect(x-24,y-33,48,20,'#56527b');
   rect(x-20,y-34,40,4,'#e5c88b');
   for(const dx of [-15,0,15]){
@@ -780,7 +788,7 @@ const observatory = (() => {
     rect(x-5,28,10,40,metal);rect(x-12,38,24,20,tint);
     rect(x-8,42,16,3,glint);
    }
-   label('SUPPLY BUS',360,57,'#ffdfaa',11);
+   for(const x of [334,360,386])rect(x-4,46,8,4,'#d3a875');
   }else if(index===2){
    for(const y of [44,60])line(182,y,530,y,metal,3);
    for(let x=187;x<530;x+=14)rect(x,42,4,20,tint);
@@ -802,9 +810,10 @@ const observatory = (() => {
    for(const x of [180,528])for(const y of [26,42,58,74])rect(x,y,11,3,'#bd9867');
   }
  }
- function studyEquipment({rect,line,label},floor){
+ function studyEquipment({rect,line,label,shadow},floor){
   const metal='#798c96',body='#273442',wood='#8f725a';
   const rack=(x)=>{
+   shadow?.(x+66,151,69,5);
    rect(x,125,132,23,'#24313c');
    rect(x+5,130,122,15,'#4d5355');
    rect(x,119,132,8,wood);
@@ -893,33 +902,37 @@ const observatory = (() => {
   }
   label(name.toUpperCase(),359,270,gold,12);
  }
- function drawRoom(id,art,state,doors,t,repairPhase=1){
-  const {rect,line,label}=art;
+ function drawRoom(id,art,state,doors,t,repairPhase=1,backdrop=null){
+  const {rect,line,label,shadow}=art;
   const floor=floorFor(id);
   const side=floor?.side===id;
   const online=floor?done(state,floor.index):id===secret?state.contact:powered(state);
-  rect(0,0,720,360,'#17232c');
-  rect(29,46,662,284,'#364853');
-  for(let y=52;y<329;y+=23)for(let x=34;x<682;x+=34){
-   rect(x,y,29,20,(x+y)%3?'#3b4d58':'#425562');
-   if((x+y)%5===0)rect(x+6,y+4,9,2,'#546673');
+  if(backdrop)backdrop();
+  else{
+   rect(0,0,720,360,'#17232c');
+   rect(29,46,662,284,'#364853');
+   for(let y=52;y<329;y+=23)for(let x=34;x<682;x+=34){
+    rect(x,y,29,20,(x+y)%3?'#3b4d58':'#425562');
+    if((x+y)%5===0)rect(x+6,y+4,9,2,'#546673');
+   }
+   rect(0,0,720,53,'#293743');
+   rect(0,43,720,9,floor?.tint||'#66808a');
+   rect(0,331,720,29,'#24353d');
+   rect(30,50,8,282,'#6b8188');rect(683,50,8,282,'#6b8188');
+   rect(161,10,390,78,'#112630');
+   rect(168,17,376,64,'#213e50');
+   for(let i=0;i<24;i++)rect(178+i*71%350,25+i*i*13%45,i%4?2:3,2,'#92abb7');
+   for(const x of [168,293,419,540])rect(x,14,4,70,'#81949a');
+   rect(160,79,391,10,floor?.tint||'#748386');
   }
-  rect(0,0,720,53,'#293743');
-  rect(0,43,720,9,floor?.tint||'#66808a');
-  rect(0,331,720,29,'#24353d');
-  rect(30,50,8,282,'#6b8188');rect(683,50,8,282,'#6b8188');
-  rect(161,10,390,78,'#112630');
-  rect(168,17,376,64,'#213e50');
-  for(let i=0;i<24;i++)rect(178+i*71%350,25+i*i*13%45,i%4?2:3,2,'#92abb7');
-  for(const x of [168,293,419,540])rect(x,14,4,70,'#81949a');
-  rect(160,79,391,10,floor?.tint||'#748386');
+  if(id!==offworld)wallBaseShadow(art,82);
   if(floor)labArchitecture(art,floor,side);
-  if(id===lobby)drawObservatoryLobbyBackdrop(art,online);
-  if(id!==offworld)drawBackdropDetails(id,art,'observatory',floor?.tint);
+  if(id===lobby)drawObservatoryLobbyBackdrop(art,online,Boolean(backdrop));
+  if(!backdrop&&id!==offworld)drawBackdropDetails(id,art,'observatory',floor?.tint);
 
   if(id===offworld){
-   sceneryOffworld(art);
-   drawBackdropDetails(id,art,'nacre');
+   sceneryOffworld(art,Boolean(backdrop));
+   if(!backdrop)drawBackdropDetails(id,art,'nacre');
    for(let i=0;i<8;i++){
     const drift=(t*.15+i*.19)%1;
     rect((99+i*87+drift*24)%700,118+i*11%41-drift*11,2,2,'#d4b7d799');
@@ -927,6 +940,7 @@ const observatory = (() => {
   }
   else if(side){studyEquipment(art,floor);studyFixture(art,floor,state.studySettings[floor.index],t);}
   else{
+   shadow?.(358,175,94,6);
    rect(268,118,180,60,'#222f38');
    rect(276,118,164,51,floor?.tint||'#726e59');
    rect(277,119,162,4,'#ae9a7d');
@@ -951,7 +965,7 @@ const observatory = (() => {
    rect(417,123,14,11,'#182930');
    rect(419,125,10,7,online?teal:gold);
    rect(420,126,8,2,online?'#e0fff2':'#ffdfaa');
-   for(const x of [125,590]){
+   for(const x of backdrop?[125,567]:[125,590]){
     rect(x-17,36,34,10,'#19252b');
     rect(x-12,40,24,3,online?'#79aba5':'#8b7967');
     if(online)rect(x-12+((t*30)%20),40,4,3,teal);
@@ -977,7 +991,7 @@ const observatory = (() => {
    const top=vertical?(door.dir==='north'?0:307):y-24;
    if(door.gate)gateArt(art,x,door.dir==='north'?54:339,door.open,t);
    else{
-    rect(left,top,vertical?62:46,vertical?53:48,'#88999d');
+    rect(left,top,vertical?62:46,vertical?53:48,backdrop?'#79778a':'#88999d');
     rect(left+5,top+4,vertical?52:36,vertical?49:40,door.open?'#263743':'#644a46');
     rect(left+9,top+8,5,6,door.open?teal:warm);
     if(door.open)rect(left+9,top+15,5,2,'#95cab3');

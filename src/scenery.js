@@ -4,12 +4,12 @@
 // Coordinates use the room art's native resolution (360 by 180).
 const foregroundRegions={
  0:[
-  [0,0,34,40,12,29,69],
-  [34,0,34,40,52,40,80],
-  [68,0,34,40,243,9,49,true],
-  [68,0,34,40,326,64,104,true],
-  [68,0,34,40,320,123,163],
-  [68,0,34,40,11,125,165],
+  [0,97,34,40,12,29,69],
+  [34,97,34,40,52,40,80],
+  [68,97,34,40,243,9,49],
+  [68,97,34,40,326,64,104,true],
+  [68,97,34,40,320,123,163],
+  [34,97,34,40,11,125,165],
  ],
  9:[
   [102,0,17,13,20,29,69],
@@ -120,19 +120,6 @@ const desertDetails={
  15:[[96,158],[200,161],[282,205],[387,183],[492,179],[574,160],[128,293],[344,298],[468,276]]
 };
 
-function restoreNorthTrailGround(room,ctx,backdrop,meadow){
- if(!northTrail[room]||!backdrop?.complete||!backdrop.naturalWidth)return;
- // Replace the baked-in tree footprints, then draw the rebuilt trail over the grass.
- for(const [index,[x,y]] of [[281,30],[317,10]].entries()){
-  ctx.drawImage(backdrop,110,0,34,40,x*2,y*2,68,80);
-  if(meadow.complete&&meadow.naturalWidth){
-   ctx.save();
-   ctx.globalAlpha=.28;
-   ctx.drawImage(meadow,index*34,0,34,40,x*2,y*2,68,80);
-   ctx.restore();
-  }
- }
-}
 function drawTrailClearance(room,{rect}){
  const trail=northTrail[room];
  if(trail){
@@ -228,34 +215,42 @@ function drawSandstoneHall({rect,line},lit){
  rect(0,327,720,33,'#4c3934');rect(0,327,720,5,'#937455');
 }
 
-function drawValleyLight({rect,line},t){
- // The accents follow Stonebridge's existing banks and remain behind the actors.
- for(const [x,y,w] of [[110,35,114],[445,36,117]]){
-  rect(x,y,w,7,'#4c6551');rect(x+8,y+7,w-12,8,'#4d5a4b');rect(x+19,y+15,w-24,5,'#384a42');
-  for(let i=0;i<w-21;i+=19)rect(x+i+8,y+3,13,2,'#81916b');
+function drawWaterGlints(room,{rect},t){
+ const bright=(i)=>(Math.floor(t*2)+i)%2===0;
+ const glint=(x,y,i)=>{
+  rect(x,y,bright(i)?11:7,2,bright(i)?'#b7e1d7ab':'#86b0ac67');
+  if(bright(i))rect(x+3,y+2,3,2,'#c0e2d662');
+ };
+ if(room===9){
+  for(let i=0;i<9;i++){
+   const x=14+i*73;
+   if(x>392&&x<448)continue;
+   glint(x,99+i*19%69,i);
+  }
+  return;
  }
- line(20,242,167,209,'#d7b98780',4);line(168,209,273,234,'#d7b98780',4);
- line(407,237,597,254,'#d7b98765',3);
- for(const x of [331,379]){
+ for(const x of [334,377]){
   for(let i=0;i<7;i++){
-   const y=(i*54+t*32+(x%11))%360;
+   const y=(i*54+x%11)%360;
    if(y>216&&y<278)continue;
-   rect(x+i%3*3,y,7,2,'#a0ced2b0');rect(x+3,y+3,4,1,'#d6e4dcb0');
+   glint(x+i%3*3,y,i);
   }
  }
 }
 
-function drawObservatoryLobbyBackdrop({rect,line},lit){
- rect(32,47,653,16,'#26334c');
- rect(39,62,638,8,'#142639');
- for(const x of [75,576]){
-  rect(x,77,73,52,'#172539');rect(x+4,80,65,43,'#2f4663');
-  for(const [dx,dy] of [[11,12],[26,29],[35,13],[58,24],[45,39]]){
-   line(x+dx-2,77+dy,x+dx+2,77+dy,'#bfdfd5',1);
-   rect(x+dx,76+dy,1,4,'#bfdfd5');
+function drawObservatoryLobbyBackdrop({rect,line},lit,painted){
+ if(!painted){
+  rect(32,47,653,16,'#26334c');
+  rect(39,62,638,8,'#142639');
+  for(const x of [75,576]){
+   rect(x,77,73,52,'#172539');rect(x+4,80,65,43,'#2f4663');
+   for(const [dx,dy] of [[11,12],[26,29],[35,13],[58,24],[45,39]]){
+    line(x+dx-2,77+dy,x+dx+2,77+dy,'#bfdfd5',1);
+    rect(x+dx,76+dy,1,4,'#bfdfd5');
+   }
+   for(const [x1,y1,x2,y2] of [[11,12,35,13],[35,13,58,24],[26,29,45,39]])line(x+x1,77+y1,x+x2,77+y2,'#738eab',1);
+   rect(x+4,123,65,3,'#698593');
   }
-  for(const [x1,y1,x2,y2] of [[11,12,35,13],[35,13,58,24],[26,29,45,39]])line(x+x1,77+y1,x+x2,77+y2,'#738eab',1);
-  rect(x+4,123,65,3,'#698593');
  }
  const conduit=lit?'#9de8ce':'#4d7d91';
  for(const x of [56,664]){
@@ -270,5 +265,38 @@ function drawSteam({rect},x,y,t,clearing=0){
   if(clearing>phase)continue;
   const lift=Math.round(phase*24);
   rect(x+Math.round(Math.sin(i+phase*4)*9),y-lift,8-lift/5,3,'#cbe2db60');
+ }
+}
+
+function wallBaseShadow({rect},y,left=0,width=720){
+ rect(left,y,width,2,'#15121b4c');
+ rect(left,y+2,width,2,'#18141c36');
+ rect(left,y+4,width,3,'#18141c20');
+}
+
+function dustPuff({rect},x,y,progress,heading=1){
+ if(progress<0||progress>=1)return;
+ for(let i=0;i<6;i++){
+  const age=progress-i*.055;
+  if(age<0)continue;
+  const drift=heading*(4+22*age)+((i*7)%11)-5;
+  const lift=2+age*(8+i);
+  const size=age<.35?4:2;
+  rect(x+drift,y-lift,size,size,age>.52?'#b5996959':'#e4c49290');
+ }
+}
+
+function drawHallWayfinding({rect,label},confirmed){
+ for(const [x,name] of [[63,'Friction track'],[657,'Force calibration']]){
+  rect(x-58,187,116,20,'#40312f');
+  rect(x-56,188,112,2,'#b99866');
+  label(name,x,201,'#ffe8bd',10);
+ }
+ rect(562,55,126,30,'#40312f');
+ rect(564,56,122,2,'#b99866');
+ label('Stairs · 2 repairs',625,68,'#ffe8bd',10);
+ for(const [i,x] of [[1,612],[2,627]]){
+  rect(x,72,11,10,'#272731');
+  label(confirmed.has(i)?'✓':'○',x+5,81,confirmed.has(i)?'#bcebb3':'#e5c686',10);
  }
 }

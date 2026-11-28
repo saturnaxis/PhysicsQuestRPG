@@ -64,7 +64,7 @@ async function checkLaunch(scope) {
  listeners.get('message')({data:'activate-update',waitUntil:promise=>{done=promise;}});
  await done;
  assert.equal(skipped,true);
- for (const path of ['field-events.js','quest-extras.js','art/observatory-night.webp','art/observatory-failure.webp','art/nacre-arrival.webp']) {
+ for (const path of ['field-events.js','quest-extras.js','prop-atlas.js','art/props.png','fonts/silkscreen.woff2','art/observatory-night.webp','art/observatory-failure.webp','art/nacre-arrival.webp']) {
   assert.ok(installed.includes(new URL(path, scope).href), path+' is available offline');
  }
  for (const name of ['elio','kez','niko','orin','sana','suri','tamsin','vega','vega-explaining','vela','vela-happy']) {

@@ -10,9 +10,9 @@ from pathlib import Path
 
 def refresh_cache(root):
     worker = root / "sw.js"
-    extensions = {".html", ".js", ".css", ".webmanifest", ".webp", ".png", ".svg", ".ico", ".flac"}
+    extensions = {".html", ".js", ".css", ".webmanifest", ".webp", ".png", ".svg", ".ico", ".flac", ".woff2"}
     candidates = list(root.iterdir())
-    for folder in ("art", "audio", "icons"):
+    for folder in ("art", "audio", "icons", "fonts"):
         candidates.extend((root / folder).rglob("*"))
     paths = sorted(
         file.relative_to(root).as_posix()

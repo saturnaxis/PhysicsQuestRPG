@@ -124,44 +124,48 @@ const exploration=(()=>{
   const surface=motion.onMat?'rough mat':'oiled boards';
   return check(state)||'Sled traveled '+distance+' cm on the '+surface+'.';
  }
- function draw(state,{rect,line,label}){
-  rect(0,0,720,360,'#2f292b');
-  rect(38,45,644,270,'#6c4a39');
-  for(let y=174;y<315;y+=16){
-   rect(40,y,640,15,y%32===14?'#856040':'#906c48');
-   for(let x=y%32===14?72:109;x<676;x+=78)rect(x,y,2,15,'#775235');
+ function draw(state,{rect,line,label,prop,shadow,motion=false},painted=false){
+  if(!painted){
+   rect(0,0,720,360,'#2f292b');
+   rect(38,45,644,270,'#6c4a39');
+   for(let y=174;y<315;y+=16){
+    rect(40,y,640,15,y%32===14?'#856040':'#906c48');
+    for(let x=y%32===14?72:109;x<676;x+=78)rect(x,y,2,15,'#775235');
+   }
+   rect(40,45,640,52,'#503d36');
+   for(let x=47;x<675;x+=43)rect(x,50,39,36,'#674b3d');
+   rect(36,92,648,7,'#ad7952');
+   drawBackdropDetails(null,{rect,line},'shed');
   }
-  rect(40,45,640,52,'#503d36');
-  for(let x=47;x<675;x+=43)rect(x,50,39,36,'#674b3d');
-  rect(36,92,648,7,'#ad7952');
-  drawBackdropDetails(null,{rect,line},'shed');
-  rect(66,52,192,34,'#392d2d');
-  label('GARDEN CALIBRATION SHED',162,74,'#f2cf92',12);
-  rect(109,139,35,16,'#3e302e');rect(113,136,28,16,'#a98257');
-  rect(117,140,18,9,'#59676c');label('BALLAST',126,130,'#f1d7a0',10);
-  rect(191,140,31,16,'#392e2b');rect(195,142,22,10,'#a47c54');
-  line(206,147,212,135,'#bd8d5c',4);rect(208,131,9,5,'#ce7862');
-  label('RESET',206,125,'#f1d7a0',10);
-  rect(499,125,56,17,'#413a30');rect(502,127,50,11,state.held?'#63906c':'#82694b');
-  label('SAFETY INTERLOCK',527,111,state.held?'#aee2a0':'#f1d7a0',11);
+  wallBaseShadow({rect},99,38,644);
+  shadow?.(rack.x,153,25,4);
+  prop?.('ballast',104,134);
+  label('Ballast',rack.x,127,'#f1d7a0',10);
+  const art=scienceLabs.fittings({rect,line,label,shadow});
+  art.lever(reset.x,reset.y-4);
+  label('Reset',reset.x,122,'#f1d7a0',10);
+  shadow?.(interlock.x,143,29,4);
+  prop?.(state.held?'interlockLive':'interlock',interlock.x-28,125);
+  label('Interlock',interlock.x,111,state.held?'#aee2a0':'#f1d7a0',10);
+  shadow?.(393,rail+18,232,5);
   rect(162,rail-13,462,31,'#473732');
-  rect(163,rail-10,seam-163,24,'#c18f54');rect(seam,rail-10,302,24,'#6e7860');
-  for(let x=168;x<seam;x+=14)line(x,rail-7,x+6,rail+11,'#9f7447',1);
-  for(let x=seam+3;x<620;x+=7){
-   line(x,rail-9,x,rail+12,'#535f52',1);
-   rect(x+2,rail+2,2,2,'#949579');
-  }
-  rect(plate-21,rail-15,42,35,'#3b4544');
-  rect(plate-18,rail-12,36,27,state.x===plate&&state.mass>=5?'#79a770':'#9a8257');
-  label('5 kg PLATE',plate,rail+34,'#f1d7a0',10);
-  label('OILED BOARDS',241,rail+42,'#ffe4af',11);
-  label('ROUGH MAT',391,rail+42,'#e2e9be',11);
+  if(!prop?.('oiled',163,rail-10,seam-163,24))rect(163,rail-10,seam-163,24,'#c18f54');
+  if(!prop?.('mat',seam,rail-10,302,24))rect(seam,rail-10,302,24,'#6e7860');
+  const pressed=state.x===plate&&state.mass>=5;
+  prop?.(pressed?'shedPlateLive':'shedPlate',plate-21,rail-15);
+  label('5 kg',plate,rail+34,'#f1d7a0',10);
   const x=Math.round(position(state));
-  rect(x-21,rail+2,42,10,'#2e322e');rect(x-18,rail-13,36,18,'#543b30');
-  rect(x-16,rail-18,32,19,'#b38454');rect(x-13,rail-16,26,15,'#755740');
-  rect(x-22,rail-2,44,5,'#d8a976');
-  label(state.mass+' kg',x,rail-5,'#fff1cc',11);
-  scienceLabs.fittings({rect,line,label}).lamp(plate+31,rail+20,state.complete?'complete':'ready');
+  shadow?.(x,rail+12,24,4);
+  if(motion&&state.motion){
+   const direction=Math.sign(state.motion.to-state.x);
+   dustPuff({rect},x-direction*15,rail+10,state.motion.t,-direction);
+  }
+  if(!prop?.('ballastSled',x-23,rail-20))rect(x-21,rail-13,42,26,'#755740');
+  label(state.mass+' kg',x,rail,'#fff1cc',11);
+  art.lamp(plate+31,rail+20,state.complete?'complete':'ready');
  }
- return {fresh,restore,snapshot,leave,badges,rewards,clue,blocks,controls,use,update,draw};
+ function plateReading(state){
+  return state.x===plate&&!state.motion?state.mass+' kg · trips at 5 kg':'';
+ }
+ return {fresh,restore,snapshot,leave,badges,rewards,clue,blocks,controls,use,update,draw,plateReading};
 })();

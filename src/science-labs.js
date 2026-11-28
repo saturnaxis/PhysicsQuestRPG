@@ -20,7 +20,7 @@ const scienceLabs = (() => {
   ?{x:348,y:296,width:66,height:24}
   :{x:360,y:room===6?296:292,width:76,height:20};
  const equipment={
-  liftRack:[{x:175,y:232,weight:400},{x:243,y:232,weight:680}],
+  liftRack:[{x:175,y:232,weight:400},{x:243,y:232,weight:680},{x:209,y:232,weight:520}],
   liftHook:{x:500,y:241},liftLever:{x:322,y:224},
   pistons:[{x:238,y:224,area:200},{x:475,y:224,area:80}],pump:{x:353,y:224},
   carts:[{x:222,y:224,mass:2,speed:3},{x:300,y:224,mass:5,speed:2}],
@@ -40,12 +40,12 @@ const scienceLabs = (() => {
   4:'Move the counterweight along the beam. Hold it near balance to lock the bridge.'
  };
  const hints={
-  lift:['The heavier side of the pulley starts moving down. The other side rises.','Choose a counterweight heavier than the occupied 520 N platform.','Hang the 680 N counterweight on the hook and pull the lift lever.'],
+  lift:['The heavier side of the pulley starts moving down. The other side rises.','Choose a counterweight heavier than the occupied 520 N platform.','Compare each rack weight with 520 N. Choose one that will pull downward harder than the platform.'],
   hydraulic:['At the same pressure, more piston area produces more force.','The larger piston gains 20 N for every kPa of pressure. The gate needs 600 N.','Route to the 200 cm² piston and set the pump to at least 30 kPa.'],
   brake:['Read the Guardian’s signed momentum before launching.','Choose a cart with equal momentum magnitude and launch opposite the Guardian’s motion.','The 5 kg cart carries 10 kg·m/s. The 2 kg cart carries 6 kg·m/s. Match the current phase.'],
   crank:['Moving the grip farther out increases torque at the same push.','Multiply 50 N by the grip distance in metres. You need at least 18 N·m.','A grip distance of 40 cm produces 20 N·m and lowers the bridge.'],
   friction:['A rougher surface brings the sled to a stop sooner.','If it went too far, try a lane with more friction. If it stopped short, try less.','Compare the rough and smooth runs. The middle-friction lane stops between them.'],
-  mass:['At the same force, a lighter mass accelerates faster.','Divide 12 N by the target acceleration of 3 m/s².','12 ÷ 3 = 4. Carry the 4 kg block to the plate.'],
+  mass:['At the same force, a lighter mass accelerates faster.','Divide 12 N by the target acceleration of 3 m/s².','Rearrange F = ma for the unknown mass. Use the same force and target acceleration when comparing the blocks.'],
   force:['Compare the arrows. The stronger side determines the direction of the net force.','Adjust the left pull toward the fixed 12 N pull on the right.','Set the left pull to 12 N, then hold the setting with Interact.'],
   momentum:['Increasing the launch speed makes the coupled carts roll farther.','The carts stick, so the combined speed is two-thirds of the launch speed.','A 3 m/s launch gives a 2 m/s coupled speed. The brake then stops the carts in 2 m.'],
   torque:['A weight farther from the pivot has more turning effect.','Compare 4 kg × 1 m with 2 kg × the distance you set.','Place the 2 kg mass 2 m from the center.']
@@ -288,9 +288,10 @@ const scienceLabs = (() => {
  }
 
  // Shared machine fittings for the Castle rigs and Observatory workbenches.
- function fittings({rect,line,label}){
+ function fittings({rect,line,label,shadow}){
   const ink='#202735', metal='#637a80', brass='#d1a66f';
   function foot(x,y,width=42){
+   shadow?.(x,y+8,width*.55,4);
    rect(x-width/2,y-4,width,13,ink);
    rect(x-width/2+2,y-5,width-4,4,metal);
    rect(x-width/2+4,y+1,3,3,brass);
@@ -312,6 +313,7 @@ const scienceLabs = (() => {
    if(filled)rect(x-6,y-7,12,5,'#82bca8');
   }
   function rack(x,y,width=46){
+   shadow?.(x,y+9,width*.54,4);
    rect(x-width/2+3,y-2,5,12,ink);rect(x+width/2-8,y-2,5,12,ink);
    rect(x-width/2,y-4,width,8,'#6a4b3f');
    rect(x-width/2+1,y-5,width-2,3,'#ac825a');
@@ -352,12 +354,11 @@ const scienceLabs = (() => {
   };
   return points[lab.room];
  }
- function draw(lab,now,paint,complete=false,state=complete?'complete':'ready'){
-  const {rect,line,label}=paint;
+ function draw(lab,now,paint,complete=false,state=complete?'complete':'ready',paintedBay=false){
+  const {rect,line,label,cartArt,prop,shadow}=paint;
   const dark='#243638', edge='#56706d', light='#f6dfac', gold='#eec879', green='#a4da95';
-  const base=(x,y,w,h)=>{rect(x,y,w,h,dark);rect(x,y,w,3,edge);};
   const block=(x,y,mass)=>{
-   rect(x-17,y-14,34,27,'#715743');rect(x-15,y-12,30,5,'#ba986a');
+   if(!prop?.('massBlock',x-17,y-14))rect(x-17,y-14,34,27,'#715743');
    label(mass+' kg',x,y+6,light,12);
   };
   const art=fittings(paint);
@@ -368,7 +369,7 @@ const scienceLabs = (() => {
   };
  if(lab.room===0){
   for(const item of equipment.liftRack){
-   art.rack(item.x,item.y,48);
+   art.rack(item.x,item.y,32);
    if(!rackWeights(lab).includes(item))continue;
    rect(item.x-16,item.y-18,32,16,'#272f3a');
    rect(item.x-14,item.y-16,28,13,'#65767c');
@@ -388,9 +389,13 @@ const scienceLabs = (() => {
  }else if(lab.room===6){
   for(const [i,cart] of equipment.carts.entries()){
    art.rack(cart.x,cart.y);
-   rect(cart.x-16,cart.y-16,32,10,i===lab.cartIndex?'#8fc3a9':'#aa8158');
-   for(const dx of [-11,9])rect(cart.x+dx,cart.y-6,5,4,dark);
-   label(cart.mass+' kg',cart.x,cart.y-7,light,10);
+   if(i===lab.cartIndex)rect(cart.x-17,cart.y-19,34,2,'#8fc3a9');
+   if(!cartArt?.('cart',cart.x,cart.y-3,i===1?32:26)){
+    rect(cart.x-16,cart.y-16,32,10,'#aa8158');
+    for(const dx of [-11,9])rect(cart.x+dx,cart.y-6,5,4,dark);
+   }
+   rect(cart.x-16,cart.y+4,32,12,'#303536');
+   label(cart.mass+' kg',cart.x,cart.y+13,light,10);
   }
   for(const launcher of equipment.launchers)art.lever(launcher.x,launcher.y,state==='working');
  }else if(lab.room===9){
@@ -399,18 +404,26 @@ const scienceLabs = (() => {
   rect(grip-3,201-(grip-443)/3,6,7,gold);
   if(!complete)label(lab.values.crank+' cm',point.x,237,light,11);
  }else{
- base(112,75,493,126);
+  if(!paintedBay){
+   rect(104,68,512,140,'#403932');
+   rect(109,71,502,132,'#79624b');
+   rect(120,79,480,115,'#30403c');
+   rect(120,191,480,3,'#6a6554');
+  }
   if(lab.room===1){
    const {pixelsPerMetre:travel,start}=sledTrack;
    for(const [i,surface] of surfaces.entries()){
     const y=101+i*40;
-    rect(start-21,y-13,385,26,surface.color);
+    if(!prop?.(['smooth','stone','rough'][i],start-21,y-13,385,26))rect(start-21,y-13,385,26,surface.color);
     for(let step=0;step<=6;step++)rect(start+step*travel,y+10,1,5,'#243638');
-    rect(start+frictionZone[0]*travel,y-12,(frictionZone[1]-frictionZone[0])*travel,24,'#c0a36c');
+    const bandX=start+frictionZone[0]*travel, bandWidth=(frictionZone[1]-frictionZone[0])*travel;
+    if(!prop?.('scoreBand',bandX,y-12,bandWidth,24))rect(bandX,y-12,bandWidth,24,'#c0a36c');
     const run=lab.trial?.key==='friction'&&lab.trial.index===i?lab.trial:null;
     const t=run?Math.min(Math.max(0,now-run.started),run.speed/run.deceleration):0;
     const x=start+(run?run.speed*t-.5*run.deceleration*t*t:0)*travel;
-    rect(x-9,y-6,18,12,'#384340');rect(x-8,y-6,16,3,run?.win?green:gold);
+    shadow?.(x,y+7,12,3);
+    if(!prop?.('frictionSled',x-11,y-10))rect(x-9,y-6,18,12,'#384340');
+    if(run?.win&&t>=run.speed/run.deceleration)rect(x-6,y-8,12,2,green);
     if(run&&t>=run.speed/run.deceleration)label(number(run.distance)+' m',548,y+5,light,11);
     art.lever(165+i*150,223,state==='working'&&Boolean(run));
     label(surface.name,165+i*150,244,light,10);
@@ -421,13 +434,15 @@ const scienceLabs = (() => {
    label('Net force: '+netForceLabel(net),360,96,netColor,14);
    arrow(360,112,Math.sign(net),Math.abs(net)*6,netColor);
    if(!net)rect(358,110,4,4,netColor);
-   rect(332,129,56,30,'#817360');
+   if(!prop?.('testBlock',332,129))rect(332,129,56,30,'#817360');
    arrow(390,144,1,fixed*6,gold);
    arrow(330,144,-1,value*6,net===0?green:'#8ec7c2');
    label(value+' N left',243,173,light,12);label(fixed+' N right',474,173,light,12);
    for(const item of rackWeights(lab)){art.rack(item.x,item.y);block(item.x,item.y,item.mass);}
-   rect(plate.x-26,plate.y-14,52,27,lab.calibrated?'#5d845f':'#ad925b');
-   label('PLATE',plate.x,plate.y+28,light,11);
+   shadow?.(plate.x,plate.y+13,27,5);
+   if(!prop?.(lab.calibrated?'forcePlateLive':'forcePlate',plate.x-26,plate.y-14)){
+    rect(plate.x-26,plate.y-14,52,27,lab.calibrated?'#5d845f':'#ad925b');
+   }
    if(lab.load)block(plate.x,plate.y,lab.load);
    art.dial(537,223,value/20);
   }else if(lab.room===3){
@@ -438,13 +453,17 @@ const scienceLabs = (() => {
    const t=coupled?Math.min(e-run.approachTime,run.coupledSpeed):0;
    const rolled=coupled?(run.coupledSpeed*t-.5*t*t)*pixelsPerMetre:0;
    const incoming=coupled?contact-gap+rolled:start+(run?run.speed*e*pixelsPerMetre:0);
-   rect(141,151,454,6,edge);
-   rect(contact+momentumZone[0]*pixelsPerMetre,146,(momentumZone[1]-momentumZone[0])*pixelsPerMetre,19,'#bc9c60');
-   const wagon=(x,text)=>{
-    rect(x-17,123,34,20,'#ac875f');rect(x-12,144,6,9,'#182825');rect(x+6,144,6,9,'#182825');
-    label(text,x,137,light,11);
+   if(!prop?.('rail',141,150,454,8))rect(141,151,454,6,edge);
+   const scoreX=contact+momentumZone[0]*pixelsPerMetre, scoreWidth=(momentumZone[1]-momentumZone[0])*pixelsPerMetre;
+   if(!prop?.('scoreBand',scoreX,146,scoreWidth,19))rect(scoreX,146,scoreWidth,19,'#bc9c60');
+   const wagon=(kind,x,text)=>{
+    shadow?.(x,154,21,3);
+    if(!cartArt?.(kind,x,153,40)){
+     rect(x-17,123,34,20,'#ac875f');rect(x-12,144,6,9,'#182825');rect(x+6,144,6,9,'#182825');
+    }
+    label(text,x,129,light,11);
    };
-   wagon(incoming,'4 kg');wagon(contact+rolled,'2 kg');
+   wagon('cart',incoming,'4 kg');wagon('receiver',contact+rolled,'2 kg');
    label('Launch '+lab.values.momentum+' m/s',205,180,light,12);
    if(coupled)label('Coupled '+number(run.coupledSpeed)+' m/s',464,180,light,12);
    art.dial(323,223,(lab.values.momentum-1)/3);
@@ -452,8 +471,16 @@ const scienceLabs = (() => {
    const value=lab.values.torque,imbalance=torque(value);
    const pivot=300,y=145,scale=63,tilt=Math.max(-.16,Math.min(.16,imbalance/170));
    const height=x=>y+(x-pivot)*tilt;
-   line(180,height(180),550,height(550),gold,6);
-   line(pivot,y,pivot,179,'#a9aa8a',9);
+   shadow?.(pivot,180,23,4);
+   if(!prop?.('fulcrum',pivot-24,y-10)){
+    line(pivot,y,pivot,179,'#a9aa8a',9);
+    line(180,height(180),550,height(550),gold,6);
+   }else{
+    for(let x=180;x<550;x+=12){
+     const width=Math.min(12,550-x);
+     prop('beam',x,height(x+width/2)-5,width);
+    }
+   }
    for(let n=-1;n<=3;n++){
     const x=pivot+n*scale;
     line(x,height(x)-5,x,height(x)+7,edge,2);

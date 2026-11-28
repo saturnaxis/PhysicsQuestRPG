@@ -6,6 +6,54 @@ Releases use `0.Y.XX`. Increase `Y` when a major playable area is complete and r
 
 The first playable Mechanics Castle campaign is `0.1.00`. The Desert Observatory milestone is `0.2.00`, marked by the ability to finish the expedition with Vela on Nacre in hosted build 34. Hosted build 53 is `0.2.19`. The GitHub packaging revision increments that to `0.2.20`.
 
+## 0.2.29
+
+GitHub packaging revision based on hosted build 60.
+
+- Package the private build for GitHub Pages and include the source, reproducible art tools, and rebuilt offline site.
+
+## 0.2.28
+
+Hosted build 60.
+
+- Pin trial readings separately from the next action and save them with progress. Add the 520 N balance case, correct the lift diagram, revise the research and debrief, and signpost the Great Hall and Observatory entrance.
+
+## 0.2.27
+
+Hosted build 59.
+
+- Add flickering lanterns, colored light pools, contact shadows, and reduced-motion-aware apparatus effects. Cache Silkscreen for offline play, frame portraits in brass, and polish the hydraulic labels and Calibration Shed.
+
+## 0.2.26
+
+Hosted build 58.
+
+- Align the Sandstone Pass trail with the service gate and the matching route in Service Gulch.
+
+## 0.2.25
+
+Hosted build 57.
+
+- Add a pixel-art prop atlas for research furniture, lab apparatus, and the Calibration Shed. Trim redundant labels while keeping numeric readouts visible.
+
+## 0.2.24
+
+Hosted build 56.
+
+- Upgrade character walk and carry sprites, refresh the rail carts, and redraw the Flywheel Guardian with separate flywheel and visor layers.
+
+## 0.2.23
+
+Hosted build 55.
+
+- Roll the new backdrop style out across all 36 rooms and refine the three pilot rooms.
+
+## 0.2.22
+
+Hosted build 54.
+
+- Introduce the Castle Approach, Friction Lab, and Observatory Floor 1 art pilots.
+
 ## 0.2.21
 
 GitHub release following 0.2.20.

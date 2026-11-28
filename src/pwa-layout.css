@@ -1,3 +1,11 @@
+@font-face {
+  font-family: Silkscreen;
+  src: url("fonts/silkscreen.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 html, body {
   height: 100%;
   overflow: hidden;
@@ -406,7 +414,7 @@ body {
   --window-edge: #566781;
   --window-shadow: #101727;
   --window-fill: linear-gradient(#2b3d5c, #1b273f);
-  --display-type: ui-monospace, "Lucida Console", monospace;
+  --display-type: Silkscreen, ui-monospace, "Lucida Console", monospace;
 }
 
 .sheet,
@@ -433,7 +441,17 @@ header h1,
 .sheet h2,
 .sheet .avatar strong {
   font-family: var(--display-type);
-  letter-spacing: -.035em;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+header h1 { font-size: clamp(16px, 3vw, 30px); }
+.status #room { font-size: clamp(12px, 2.2vw, 21px); overflow-wrap: anywhere; }
+.sheet h2 { font-size: clamp(14px, 2.6vw, 23px); }
+.sheet .avatar strong { font-size: clamp(15px, 2.5vw, 22px); }
+.speaker-portrait {
+  border: 2px solid;
+  border-color: #7d5a39 #e2bc7e #e2bc7e #7d5a39;
+  border-radius: 1px;
 }
 .sheet h2 { line-height: 1.16; }
 .sheet .tag, .status .tag { font-family: var(--display-type); }
@@ -489,4 +507,38 @@ header h1,
 .plan-confirmation {
   border-inline-start: 3px solid #597f6c;
   padding-inline-start: .7em;
+}
+
+/* Readings have a dedicated slot so the next action can change independently. */
+.trial-reading:not([hidden]) {
+  grid-area: 4 / 1 / 5 / -1;
+  justify-self: start;
+  margin: 0;
+  padding: 1px 6px;
+  color: #e4f5ee;
+  background: #192d3c;
+  border-inline-start: 2px solid #8acbac;
+  font: 600 .82rem/1.2 system-ui, sans-serif;
+}
+.status-copy:has(.trial-reading:not([hidden])) {
+  grid-template-rows: auto 6px minmax(0, 1fr) auto;
+}
+.status-copy:has(.trial-reading:not([hidden])) .status-message:not(.expanded) #feedback,
+.status-line:has(.active-action[data-guidance="true"]) .status-message:not(.expanded) #operator-prompt,
+.status-line:has(.active-action[data-guidance="true"]) .status-separator,
+.status-copy:has(.trial-reading:not([hidden])) .status-line:has(#operator-prompt[hidden]) .status-separator {
+  display: none;
+}
+@media (orientation: landscape) and (max-height: 500px),
+       (orientation: landscape) and (max-height: 600px) and (any-pointer: coarse) {
+  .status-copy:has(.trial-reading:not([hidden])) {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .status-copy:has(.trial-reading:not([hidden])) .status-line {
+    grid-area: 1 / 2;
+  }
+  .trial-reading:not([hidden]) {
+    grid-area: 2 / 2;
+    font-size: .76rem;
+  }
 }

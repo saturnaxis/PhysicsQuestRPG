@@ -90,12 +90,13 @@
 </head><body><main><header><div><small>PHYSICS QUEST</small><h1>Mechanics Castle</h1></div><div class="app-tools"><p id="offline-status" role="status" hidden></p><a href="update.html" id="game-update" hidden>Update game</a><button id="touch-mode" type="button">Touch: on</button><button id="screen-mode" type="button" hidden>Fullscreen</button></div></header>
 <section class="stage" aria-label="Mechanics Castle game"><div class="frame"><canvas width="720" height="360" aria-label="Top-down view of the current room"></canvas><div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Game dialogue"></div></div><div class="touch" role="group" aria-label="Touchscreen game controls"><div class="pad" role="group" aria-label="Directional pad"><button data-key="ArrowLeft" aria-label="Left">←</button><button data-key="ArrowUp" aria-label="Up">↑</button><button data-key="ArrowDown" aria-label="Down">↓</button><button data-key="ArrowRight" aria-label="Right">→</button></div><div class="choices controller-actions"><button id="interact" data-touch-label="Select"><kbd>E</kbd> Select</button><button id="card" data-touch-label="Back" hidden><kbd>C</kbd> Back / Card</button><button id="notes" data-touch-label="Notes" hidden><kbd>N</kbd> Research</button><button id="menu" data-touch-label="Menu" hidden><kbd>P</kbd> Menu</button></div></div></div>
 <div class="status" id="status" hidden>
-  <div class="status-copy"><div class="topline"><h2 id="room"></h2><span class="tag" id="floor"></span></div><div class="meter" id="completion" role="progressbar" aria-label="Mechanics Castle completion" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="progress"></span></div><div class="status-line"><span class="active-action" id="active-action"></span><span class="status-separator" aria-hidden="true"> - </span><div class="status-message" id="status-message" tabindex="-1"><p class="operator-prompt" id="operator-prompt" aria-live="polite" hidden></p><p id="feedback" aria-live="polite"></p></div></div><button class="status-expand" id="status-expand" type="button" aria-controls="status-message" aria-expanded="false">More</button></div>
+  <div class="status-copy"><div class="topline"><h2 id="room"></h2><span class="tag" id="floor"></span></div><div class="meter" id="completion" role="progressbar" aria-label="Mechanics Castle completion" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="progress"></span></div><div class="status-line"><span class="active-action" id="active-action"></span><span class="status-separator" aria-hidden="true"> - </span><div class="status-message" id="status-message" tabindex="-1"><p class="operator-prompt" id="operator-prompt" aria-live="polite" hidden></p><p id="feedback" aria-live="polite"></p></div></div><p id="trial-reading" class="trial-reading" role="status" aria-label="Latest trial reading" hidden></p><button class="status-expand" id="status-expand" type="button" aria-controls="status-message" aria-expanded="false">More</button></div>
 </div></section>
 </main>
 <script src="audio/music-manager.js"></script>
 <script src="scenery.js"></script>
 <script src="gameplay.js"></script>
+<script src="prop-atlas.js"></script>
 <script src="science-labs.js"></script>
 <script src="valley-investigations.js"></script>
 <script src="portraits.js"></script>
@@ -132,7 +133,8 @@ const reducedMotion=()=>Boolean(motionPreference?.matches);
 const guardianTimingKey='physics-quest-relaxed-guardian-v1';
 let relaxedGuardianTiming=false;
 try{relaxedGuardianTiming=localStorage.getItem(guardianTimingKey)==='on';}catch{}
-let guardianShift=null;
+let guardianShift=null, weightDust=null;
+const brakeImpactAt=.95/1.22;
 
 const gameMode=()=>adventure.state({onTitle,modal:!$('modal').hidden,choosing,busy,avatar,transitioning:Boolean(roomTransition)});
 function canMove(){return gameMode()==='exploration';}
@@ -520,13 +522,20 @@ document.querySelectorAll('[data-key]').forEach(el=>{
  el.onpointerup=el.onpointercancel=el.onlostpointercapture=()=>keys.delete(el.dataset.key);
 });
 const loadArt=name=>{const asset=new Image();asset.src='art/'+name;return asset;};
-const roomImages=Array.from({length:24},(_,i)=>loadArt('room-'+i+'.webp'));
+const roomImages=Array.from({length:36},(_,i)=>loadArt(i===25?'observatory-charge-lab.webp':'room-'+i+'.webp'));
+const hasRoomArt=id=>roomImages[id]?.complete&&roomImages[id].naturalWidth;
 const foregroundArt=loadArt('foreground.png');
-const meadowGroundArt=loadArt('meadow-ground.webp');
-const characterSheets=Object.fromEntries(['rowan','sage','mira','sol','vega','tamsin','suri','sana','vela']
- .map(name=>[name,loadArt(name+'-directions.png')]));
-const personImages=Object.fromEntries([['#817eaa','inez'],['#bf9360','teo']].map(([tone,name])=>[tone,loadArt(name+'-directions.png')]));
-const vehicleImages={cart:loadArt('cart.png'),receiver:loadArt('receiver.png'),guardian:loadArt('guardian.png')};
+const propAtlas=loadArt('props.png');
+const characterSheets=Object.fromEntries([
+ 'rowan','sage','mira','sol','vega','tamsin','suri','sana','vela',
+ 'inez','teo','fen','lin','pax','uma','dev','kit','ada','ren','jo','bea','neri','orin','elio','kez','niko',
+ 'student-rose','student-teal','student-olive','student-plum'
+].map(name=>[name,loadArt(name+'-directions.png')]));
+const readyArt=image=>image?.complete&&image.naturalWidth;
+const railArt={
+ cart:loadArt('cart.png'),receiver:loadArt('receiver.png'),
+ guardian:loadArt('guardian.png'),wheel:loadArt('guardian-wheel.png'),visor:loadArt('guardian-visor.png')
+};
 const rect=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),w,h);};
 function label(text,x,y,color='#f4ead0',size=14){
  ctx.fillStyle=color;ctx.font='bold '+size+'px monospace';ctx.textAlign='center';ctx.fillText(text,x,y);
@@ -536,35 +545,31 @@ function line(x,y,x2,y2,color,width=3){
 }
 function sprite(x,y,look,walking=false,facing='east',carrying=false){
  const name=look.sprite||look.name?.split(' ').at(-1).toLowerCase();
- const sheet=Object.hasOwn(characterSheets,name)?characterSheets[name]:null;
- if(sheet?.complete&&sheet.naturalWidth){
-  const row=['east','west','south','north'].indexOf(facing);
-  const step=walking?[0,1,0,2][Math.floor(time*9)%4]:0;
-  const column=step+(carrying?3:0);
-  ctx.drawImage(sheet,column*26,row*32,26,32,x-17,y-27,34,42);
-  return;
- }
- const img=personImages[look.coat];
- if(img?.complete&&img.naturalWidth){
-  const step=walking?Math.floor(time*7)%2+1:0;
-  ctx.drawImage(img,step*24,28*(['east','west','south','north'].indexOf(facing)),24,28,x-16,y-22,32,36);
-  return;
- }
- rect(x-12,y+7,24,7,'#10191288');rect(x-8,y-3,16,12,look.coat);
- rect(x-9,y+7,6,5,'#252a31');rect(x+3,y+7+(walking?Math.sin(time*19)*4:0),6,5,'#252a31');
- rect(x-8,y-14,16,12,look.hair);if(facing!=='north'){rect(x-6,y-10,12,9,'#e9ba89');rect(x+(facing==='west'?-4:2),y-7,2,2,'#332b28');if(facing==='south')rect(x-4,y-7,2,2,'#332b28');}rect(x-9,y-16,15,5,look.hair);
- rect(x-12,y-1,5,8,'#b8a16a');
+ const sheet=characterSheets[name]??characterSheets['student-teal'];
+ if(!readyArt(sheet))return;
+ const row=['east','west','south','north'].indexOf(facing);
+ const step=walking?[0,1,0,2][Math.floor(time*9)%4]:0;
+ const column=step+(carrying?3:0);
+ ctx.drawImage(sheet,column*26,row*32,26,32,x-17,y-27,34,42);
 }
-function cart(x,y,color,w=37){
- const img=vehicleImages[color==='#a8584a'?'guardian':color==='#849b8b'?'receiver':'cart'];
- if(img.complete&&img.naturalWidth){ctx.drawImage(img,x-w/2,y-23,w,30);return;}
- rect(x-w/2,y-16,w,14,color);rect(x-w/2+3,y-13,w-6,3,'#f5ddb76b');
- rect(x-w/2+4,y-3,8,8,'#1c2222');rect(x+w/2-12,y-3,8,8,'#1c2222');
+function cartArt(kind,x,y,width){
+ const image=railArt[kind];
+ if(!readyArt(image))return false;
+ const height=Math.round(width*28/48);
+ ctx.drawImage(image,Math.round(x-width/2),Math.round(y-height*25/28),width,height);
+ return true;
+}
+function drawProp(name,x,y,width,height){
+ const [sx,sy,w,h]=propAtlasRegions[name];
+ if(!readyArt(propAtlas))return false;
+ ctx.drawImage(propAtlas,sx,sy,w,h,Math.round(x),Math.round(y),Math.round(width??w*2),Math.round(height??h*2));
+ return true;
 }
 function liftArt(a,p,lab){
  const rim=115, platform=rim+(a?(a.win?85*(1-p):85+12*p):85);
  const weight=134+(a?(a.win?85*p:-12*p):0);
  const stone='#677a70', edge='#9ba68e', brass='#d5ad66';
+ contactShadow(361,218,205,6);
  rect(159,110,404,111,'#253a37');
  rect(172,115,382,94,'#142726');
  rect(183,117,360,92,'#101c20');
@@ -611,11 +616,18 @@ function labArtState(index,complete){
 function equipment(){
  const lab=currentLab();
  const state=labArtState(roomIndex,labDone());
- if(lab&&[1,2,3,4].includes(lab.room)){scienceLabs.draw(lab,time,{rect,line,label},labDone(),state);return;}
- const a=animation,p=a?Math.min(1,(time-a.start)/.95):0;
+ const paintedBay=hasRoomArt(roomIndex);
+ if(lab&&[1,2,3,4].includes(lab.room)){
+  scienceLabs.draw(lab,time,{rect,line,label,cartArt,prop:drawProp,shadow:contactShadow},labDone(),state,paintedBay);return;
+ }
+ const a=animation;
+ const age=a?time-a.start:0;
+ const impact=roomIndex===6&&a&&brakeImpact(a,time);
+ const brakeAge=impact?.hold?brakeImpactAt:age-(impact?.pause??0);
+ const p=Math.max(0,Math.min(1,(roomIndex===6?brakeAge:age)/.95));
  const gold='#f0cb78', steel='#849b8b', dark='#273833';
  const kind=room().kind;
- if(kind!=='lift'){
+ if(kind!=='lift'&&!paintedBay){
   rect(108,70,504,131,'#18272b');rect(114,75,492,121,dark);
   for(let x=120;x<605;x+=22)rect(x,189,14,2,'#465b56');
   rect(111,72,498,3,'#708379');
@@ -624,7 +636,7 @@ function equipment(){
  if(kind==='lift'){
   liftArt(a,p,lab);
  }else if(kind==='fluid'){
-  hydraulicArt(a,p,lab);
+  hydraulicArt(a,p,lab,paintedBay);
  }else{
   line(135,156,586,156,steel,6);
   const direction=lab.heading;
@@ -632,9 +644,18 @@ function equipment(){
   const rhythm=reducedMotion()?0.5:cycle.position;
   const gx=a?(direction>0?245:475)+direction*(a.win?96:156)*p:passed?360:360+direction*(rhythm*150-75);
   const cx=a?(a.side>0?135:585)+(gx-(a.side>0?135:585))*Math.min(1,p*1.22):135;
-  cart(cx,155,gold,(a?.index??lab.cartIndex)===1?42:31);
+  cartArt('cart',cx,155,(a?.index??lab.cartIndex)===1?42:31);
   const shifting=guardianShift===null||reducedMotion()?1:Math.min(1,time-guardianShift);
-  guardianArt(gx,158,finished,lab.brakes>0,shifting);
+  guardianArt(gx,158,finished,lab.brakes>0,shifting,impact?.hold?a.impactAt:time);
+  if(impact&&impact.age<.19){
+   const burst=impact.age/.19;
+   const contact=gx-14*(a.side>0?1:-1);
+   for(let i=0;i<9;i++){
+    const angle=(i+1)*Math.PI/10;
+    const radius=5+burst*(14+i%3*8);
+    rect(contact+Math.cos(angle)*radius,152-Math.sin(angle)*radius,burst<.45?4:2,2,i%3?'#f8a54d':'#ffe6a1');
+   }
+  }
   const momentum=scienceLabs.guardianMomentum(direction,lab.brakes);
   label(finished?'GUARDIAN ONLINE':passed?'BRAKE LOCKED':
    'PHASE '+(lab.brakes+1)+'  ·  '+Math.abs(momentum)+' kg·m/s '+(direction>0?'→':'←'),360,90);
@@ -653,56 +674,61 @@ function equipment(){
    rect(128+i*15,83,9,8,'#977160');rect(129+i*15,84,7,5,reported.has(i)?'#a4dba3':'#603a31');
   }
  }
- if(lab)scienceLabs.draw(lab,time,{rect,line,label},labDone(),state);
+ if(lab)scienceLabs.draw(lab,time,{rect,line,label,cartArt,prop:drawProp,shadow:contactShadow},labDone(),state);
 }
-function hydraulicArt(attempt,p,lab){
+function hydraulicArt(attempt,p,lab,paintedBay){
  const pressure=(attempt?.pressure??lab.values.hydraulic)+' kPa';
- const fluid='#66bab9',casing='#99a397', brass='#bd9565';
- rect(153,88,414,101,'#1c302f');
- line(238,174,475,174,'#77877d',16);
- if(lab.piston!==null)line(357,174,lab.piston===0?238:475,174,fluid,7);
- rect(322,148,70,34,'#4e6862');
- rect(327,151,60,27,'#1c312f');
+ if(!paintedBay)rect(153,88,414,101,'#1c302f');
+ if(!drawProp('pipe',238,166,237,16))line(238,174,475,174,'#77877d',16);
+ if(lab.piston!==null){
+  const end=lab.piston===0?238:475;
+  line(357,174,end,174,'#578f8f',7);
+  line(357,172,end,172,'#a6cdba',2);
+ }
+ drawProp('pressureGauge',322,148);
  label(pressure,357,171,'#c8ede0',12);
  for(const [i,x,w] of [[0,238,92],[1,475,40]]){
   const stroke=attempt?.win&&attempt.index===i?24*p:0;
   const tip=141-stroke;
   const edge=x-w/2;
-  rect(edge-5,121,w+10,64,'#263e39');
-  rect(edge,tip+7,w,178-tip,fluid);
-  rect(edge-4,121,5,66,casing);rect(edge+w,121,5,66,casing);
-  rect(edge-5,180,w+10,6,casing);
-  rect(edge,tip,w,8,'#b9bfb2');rect(edge+2,tip,w-4,2,'#e0dac7');
-  rect(x-7,tip-23,14,23,'#99a097');rect(x-4,tip-23,4,23,'#d3c9a3');
-  rect(x-49,tip-40,98,17,'#695543');rect(x-46,tip-40,92,4,brass);
-  for(const rivet of [-42,41])rect(x+rivet,tip-35,3,3,'#dbc49b');
-  label(i===0?'200 cm²':'80 cm²',x,199,'#e7d6aa',11);
+  const size=i===0?'Wide':'Narrow';
+  contactShadow(x,184,w*.56,5);
+  rect(edge,121,w,64,'#263e39');
+  drawProp('fluid'+size,edge,tip+7,w,178-tip);
+  if(lab.piston===i&&!reducedMotion()){
+   for(let j=0;j<4;j++){
+    const rise=(Math.floor(time*17)+j*7)%Math.max(1,168-tip);
+    rect(edge+7+(j*13)%Math.max(1,w-14),174-rise,j%2?2:3,2,'#c0e6d39c');
+   }
+  }
+  drawProp('cylinder'+size,edge-5,121);
+  drawProp('piston'+size,edge,tip-23);
+  drawProp('hydraulicCap',x-49,tip-40);
+  label(i===0?'200 cm²':'80 cm²',x,188,'#e7d6aa',11);
   if(attempt&&attempt.index===i){
    const lift=attempt.force+' N · '+(attempt.win?'Lift':'Holds');
    label(lift,x,94,attempt.win?'#a5de9f':'#edb184',12);
   }
  }
 }
-function guardianArt(x,y,healthy,shifted=false,shifting=1){
- const metal=healthy?'#a0a98d':shifted?'#668e91':'#ab7156';
- rect(x-32,y-31,64,29,'#303739');rect(x-28,y-34,56,27,metal);
- for(const side of [-1,1]){
-  rect(x+side*25-9,y-43,17,22,'#806349');
-  rect(x+side*37-5,y-26,10,17,'#55473b');
+function guardianArt(x,y,healthy,shifted=false,shifting=1,spriteTime=time){
+ const {guardian,wheel,visor}=railArt;
+ if(!readyArt(guardian))return;
+ const left=Math.round(x)-48, top=Math.round(y)-62;
+ ctx.drawImage(guardian,left,top,96,68);
+ const motion=!reducedMotion()&&!healthy&&!passed;
+ const tick=motion?Math.floor(spriteTime*(shifted?9:15))%8:0;
+ const frame=shifted?(8-tick)%8:tick;
+ if(readyArt(wheel))ctx.drawImage(wheel,frame*22,0,22,22,left+26,top+22,44,44);
+ if(readyArt(visor)){
+  const status=healthy?2:shifted?1:0;
+  ctx.drawImage(visor,status*16,0,16,6,left+32,top+12,32,12);
  }
- rect(x-14,y-57,28,18,'#5d5547');rect(x-12,y-54,24,10,'#263a3e');
- rect(x-7,y-52,4,5,healthy?'#a1edad':'#f29362');rect(x+3,y-52,4,5,healthy?'#a1edad':'#f29362');
- ctx.fillStyle='#3b4545';ctx.beginPath();ctx.arc(x,y-20,13,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle='#d0b578';ctx.lineWidth=3;ctx.stroke();
- if(!shifted||shifting<1){
-  const drift=shifted?Math.max(0,shifting):0;
-  ctx.save();ctx.globalAlpha=1-drift;ctx.strokeStyle='#dfbb77';
-  ctx.beginPath();ctx.arc(x+30*drift,y-20-22*drift,17,0,Math.PI*2);ctx.stroke();
-  ctx.restore();
+ if(motion&&(!shifted||shifting<1)&&Math.floor(time*12)%5===0){
+  rect(left+3,top+27,3,3,'#e39a5b');
+  rect(left-2,top+22,2,2,'#efd192');
+  rect(left+91,top+24,3,2,'#bf6a4d');
  }
- const phase=passed||reducedMotion()?0:time*(shifted?7:11);
- for(let i=0;i<3;i++){const a=phase+i*Math.PI*2/3;line(x,y-20,x+Math.cos(a)*9,y-20+Math.sin(a)*9,'#e3c296',2);}
- if(!passed&&!reducedMotion()&&Math.sin(time*16)>.7){line(x-37,y-34,x-45,y-40,'#f5ad70',2);line(x+41,y-32,x+47,y-39,'#de8a62',2);}
 }
 const rectangle=(x,y,a,b,c,d)=>x>a&&x<b&&y>c&&y<d;
 function furnitureCollision(x,y){
@@ -805,8 +831,24 @@ function movementDirection(){
  const y=Number(held('ArrowDown'))-Number(held('ArrowUp'));
  return x||y?adventure.movement(x,y):{x:stickX,y:stickY};
 }
+function brakeImpact(trial,now){
+ if(!trial||trial.impactAt===undefined||reducedMotion())return null;
+ return {age:now-trial.impactAt,hold:trial.hitStop>0,pause:trial.pause};
+}
+function updateBrakeImpact(trial,now){
+ if(!trial||!trial.side||reducedMotion()||now-trial.start<brakeImpactAt)return;
+ if(trial.impactAt===undefined){
+  trial.impactAt=now;
+  trial.hitStop=3;
+  return;
+ }
+ if(trial.hitStop>0&&--trial.hitStop===0){
+  trial.pause=Math.min(.05,now-trial.impactAt);
+ }
+}
 function frame(now){
  time=now/1000;
+ if(roomIndex===6)updateBrakeImpact(animation,time);
  const trial=busy&&roomIndex===3?currentLab()?.trial:null;
  if(trial?.key==='momentum'&&!trial.impactPlayed&&time-trial.started>=trial.approachTime){
   trial.impactPlayed=true;
@@ -859,6 +901,7 @@ function mountCounterweight(lab,control){
  }else if(lab.carry){
   const previousLoad=lab.load;
   lab.load=lab.carry;lab.carry=null;
+  setWeightDust(scienceLabs.equipment.liftHook);
   say(lab.load+' N is on the hook.'+(previousLoad?' The previous load returned to the rack.':'')+' Pull the lift lever to test it.');
  }else if(lab.load){
   lab.carry=lab.load;lab.load=null;
@@ -872,8 +915,10 @@ function testLift(lab){
  if(!lab.load){say('Hang a counterweight on the lift hook first.');return;}
  const difference=scienceLabs.liftDifference(lab.load), win=difference>0;
  animation={start:time,win};
- const message=lab.load+' N versus 520 N, a difference of '+Math.abs(difference)+' N. '+(win?'The counterweight descends and the lift rises.':'The platform is heavier, so it does not rise.');
- performTrial(lab,'lift',win,message,1.1,{onWin:walkMira});
+ const reading=lab.load+' N vs 520 N · Δ '+Math.abs(difference)+' N';
+ const motion=win?'The platform rises.':difference===0?'The loads balance. The platform does not move.':'The platform settles lower and does not rise.';
+ const message=lab.load+' N versus 520 N, a difference of '+Math.abs(difference)+' N. '+motion;
+ performTrial(lab,'lift',win,message,1.1,{onWin:walkMira,reading});
 }
 function guardianCycle(lab){
  return scienceLabs.guardianCycle(time,lab.brakes,relaxedGuardianTiming||reducedMotion());
@@ -894,7 +939,7 @@ function testBrake(lab,side){
   'The pair is still moving '+(total>0?'right':'left')+'. The brake cannot catch.';
  const reading='Cart '+signed(cart)+', guardian '+signed(guardian)+', total '+signed(total)+' kg·m/s (right is positive). ';
  performTrial(lab,'brake',win,reading+message,.98,{
-  failed:!stopped,
+  failed:!stopped,reading:signed(cart)+' + ('+signed(guardian)+') = '+signed(total)+' kg·m/s',
   onSettle(){
    animation=null;
    if(stopped){
@@ -963,7 +1008,7 @@ function useLabControl(control){
  }else if(control.id.startsWith('lane-')){
   const index=control.detail, run=scienceLabs.friction(index);
   lab.trial={...run,index,key:'friction',started:time};
-  performTrial(lab,'friction',run.win,'The sled stopped after '+scienceLabs.number(run.distance)+' m. Target zone: 2.6–3.6 m.',run.speed/run.deceleration);
+  performTrial(lab,'friction',run.win,'The sled stopped after '+scienceLabs.number(run.distance)+' m. Target zone: 2.6–3.6 m.',run.speed/run.deceleration,{reading:scienceLabs.number(run.distance)+' m · target 2.6–3.6 m'});
  }else if(control.id.startsWith('mass-')||control.id==='plate'){
   handleLabMass(lab,control);
  }else{
@@ -994,10 +1039,12 @@ function handleLabMass(lab,control){
   return;
  }
  lab.load=lab.carry;lab.carry=null;
+ setWeightDust(control.point);
  music.playBlockCue();
  const acceleration=scienceLabs.acceleration(lab.load);
  const win=Math.abs(acceleration-3)<.05;
  lab.calibrated=win;
+ trialReadings.set(roomIndex,lab.load+' kg · '+scienceLabs.number(acceleration)+' m/s²');
  if(win)music.playPlateCue();
  else requireResearchAfterFailure(lab.room);
  say(scienceLabs.result(lab,'mass',lab.load+' kg under 12 N accelerates at '+scienceLabs.number(acceleration)+' m/s². '+(win?'Calibration accepted. Use the force dial.':'Target: 3 m/s².'),win));
@@ -1009,7 +1056,11 @@ function cancelLabControl(){
   say(scienceLabs.goal(lab));renderActions();return true;
  }
  if(lab?.carry){
-  lab.carry=null;saveProgress();say('The load is back on the rack.');renderActions();return true;
+  const weight=lab.carry;
+  lab.carry=null;
+  const perch=scienceLabs.rackWeights(lab).find(item=>(item.mass??item.weight)===weight);
+  if(perch)setWeightDust(perch);
+  saveProgress();say('The load is back on the rack.');renderActions();return true;
  }
  return false;
 }
@@ -1021,26 +1072,26 @@ function runLabDial(){
   const force=scienceLabs.pistonForce(value,lab.piston), win=force>=600;
   music.playHydraulicCue();
   animation={start:time,index:lab.piston,win,pressure:value,force};
-  performTrial(lab,key,win,value+' kPa produces '+force+' N. '+(win?'The gate rises.':'The gate stays down. It needs 600 N.'),1.05);
+  performTrial(lab,key,win,value+' kPa produces '+force+' N. '+(win?'The gate rises.':'The gate stays down. It needs 600 N.'),1.05,{reading:value+' kPa · '+force+' N'});
  }else if(key==='crank'){
   const torque=scienceLabs.crankTorque(value), win=torque>=18;
   if(win)bridgeStart=time;
   performTrial(lab,key,win,value+' cm at 50 N produces '+torque+' N·m. The bridge needs 18 N·m.',.95,{
-   onWin(){gardenBridge=true;bridgeStart=null;}
+   reading:torque+' N·m · target ≥18 N·m',onWin(){gardenBridge=true;bridgeStart=null;}
   });
  }else if(key==='momentum'){
   const run=scienceLabs.collision(value);
   lab.trial={...run,key,started:time};
-  performTrial(lab,key,run.win,'The joined carts rolled '+scienceLabs.number(run.distance)+' m. Target zone: 1.7–2.3 m.',run.approachTime+run.coupledSpeed);
+  performTrial(lab,key,run.win,'The joined carts rolled '+scienceLabs.number(run.distance)+' m. Target zone: 1.7–2.3 m.',run.approachTime+run.coupledSpeed,{reading:scienceLabs.number(run.distance)+' m · target 1.7–2.3 m'});
  }else if(key==='force'){
   const net=scienceLabs.force(value);
-  performTrial(lab,key,net===0,'Net force: '+scienceLabs.netForceLabel(net)+'.',.75);
+  performTrial(lab,key,net===0,'Net force: '+scienceLabs.netForceLabel(net)+'.',.75,{reading:'Net '+scienceLabs.netForceLabel(net)});
  }else{
   const net=scienceLabs.torque(value);
-  performTrial(lab,key,Math.abs(net)<=2,'Net torque: '+scienceLabs.number(Math.abs(net))+' N·m'+(net?(net>0?' clockwise.':' counterclockwise.'):'.'),.75);
+  performTrial(lab,key,Math.abs(net)<=2,'Net torque: '+scienceLabs.number(Math.abs(net))+' N·m'+(net?(net>0?' clockwise.':' counterclockwise.'):'.'),.75,{reading:'Net '+scienceLabs.number(Math.abs(net))+' N·m'+(net?' '+(net>0?'↻':'↺'):'')});
  }
 }
-function performTrial(lab,key,win,message,seconds,{onSettle,onWin,failed=!win}={}){
+function performTrial(lab,key,win,message,seconds,{onSettle,onWin,reading,failed=!win}={}){
  if(failed)requireResearchAfterFailure(lab.room);
  const token=++attemptId;
  const dial=Boolean(lab.adjust);
@@ -1051,6 +1102,7 @@ function performTrial(lab,key,win,message,seconds,{onSettle,onWin,failed=!win}={
   if(token!==attemptId)return;
   busy=false;
   onSettle?.();
+  if(reading)trialReadings.set(lab.room,reading);
   if(roomIndex!==9)passed=win;
   choosing=dial&&!win&&!labAccessMessage(lab.room);
   if(!choosing)lab.adjust=null;
@@ -1064,7 +1116,7 @@ function performTrial(lab,key,win,message,seconds,{onSettle,onWin,failed=!win}={
 }
 
 const plans={
- 0:{name:'Lift service shed',dir:'west',title:'Lift load sheet',reading:'Mira and the platform weigh about 520 N together. The light counterweight weighs 400 N and the heavy one weighs 680 N.',principle:'The rope pulls up on the platform. With the lift at rest, compare the counterweight and platform loads to predict which way the platform will start moving.'},
+ 0:{name:'Lift service shed',dir:'west',title:'Lift load sheet',reading:'Mira and the platform weigh about 520 N together. The rack holds 400 N, 520 N, and 680 N counterweights.',principle:'The rope pulls up on the platform. With the lift at rest, compare the counterweight and platform loads to predict which way the platform will start moving.'},
  1:{name:'Timing booth',dir:'north',title:'Gate timing chart',reading:'The gate is open from 2 to 3 seconds after release. Previous runs reached it at 4 seconds on the shallow ramp and 2.5 seconds on the steep ramp.',principle:'On the tracker, wider spacing between successive marks means the cart covered more ground in the same time.'},
  2:{name:'Hinge workshop',dir:'north',title:'Lever workshop drawing',reading:'Both handles can be pulled with 30 N perpendicular to the lever. The near handle is 0.5 m from the hinge and the far handle is 1.5 m away. The latch needs 35 N·m to turn.',principle:'Multiply the perpendicular pull by the distance from the hinge to compare the available torques.'},
  3:{name:'Dispatch office',dir:'north',title:'Transfer track log',reading:'Both incoming carts travel at 2 m/s. The receiving cart is initially stationary and has a mass of 2 kg. They latch together on impact. The combined speed must reach at least 1.2 m/s to trip the catch.',principle:'Divide the incoming momentum by the combined mass to predict the coupled speed.'},
@@ -1086,7 +1138,7 @@ function nearbySource(){
 }
 
 const labPlans={
- 0:{reading:'The occupied platform weighs 520 N. Carry a 400 N or 680 N test load to the hook and pull the lift lever.',principle:'The pulley connects the two sides. The heavier side descends and lifts the lighter side. Compare each counterweight with the occupied platform.'},
+ 0:{reading:'The occupied platform weighs 520 N. Carry a 400 N, 520 N, or 680 N test load to the hook and pull the lift lever.',principle:'The pulley connects the two sides. The heavier side descends and lifts the lighter side. Compare each counterweight with the occupied platform.'},
  5:{reading:'The pump can supply up to 40 kPa. The piston ports have areas of 200 cm² and 80 cm². Route the pump to a port, then adjust the pressure. The gate needs 600 N.',principle:'Force equals pressure × area. Convert kPa to Pa and cm² to m². For example, 10 kPa on 100 cm² gives 100 N.'},
  6:{reading:'The 2 kg cart launches at 3 m/s. The 5 kg cart launches at 2 m/s. The Guardian starts at +10 kg·m/s. After the first stop it reverses and shifts to −6 kg·m/s. Launch when the gate reads LAUNCH.',principle:'Calculate momentum as mass × velocity. Coupled carts stop when their momenta cancel. The left launcher sends carts right, and the right launcher sends carts left.'},
  9:{reading:'Push perpendicular to the crank with 50 N. Slide its grip between 15 and 45 cm from the axle. The drawbridge needs at least 18 N·m of torque.',principle:'Torque equals force × distance from the axle. Use metres. For example, 50 N on a 20 cm lever produces 10 N·m.'},
@@ -1127,9 +1179,15 @@ function researchDiagram(owner){
  const box=(x,y,w,h)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="3" fill="#d7b781" stroke="'+ink+'" stroke-width="2"/>';
  const textAt=(x,y,label)=>'<text x="'+x+'" y="'+y+'" fill="'+ink+'" font-size="13" text-anchor="middle">'+label+'</text>';
  let title,content;
- if(owner===0||owner===5){
-  title=owner===0?'Free-body diagram of the occupied platform':'Free-body diagram of the gate';
-  content=box(117,62,64,35)+arrow(149,62,149,20,owner===0?'Tension':'Piston force',161,28,upward)+arrow(149,97,149,143,'Weight',161,137,downward)+textAt(149,84,owner===0?'Platform':'Gate');
+ if(owner===0){
+  title='Failed 400 N lift trial · ideal rope and pulley';
+  content=box(44,61,74,31)+box(203,61,94,31)
+   +textAt(81,81,'Platform')+textAt(250,81,'Counterweight')
+   +arrow(81,61,81,21,'Tension',93,26,upward)+arrow(250,61,250,21,'Tension',262,26,upward)
+   +arrow(81,92,81,138,'520 N',93,135,downward)+arrow(250,92,250,127,'400 N',262,126,downward);
+ }else if(owner===5){
+  title='Free-body diagram of the gate';
+  content=box(117,62,64,35)+arrow(149,62,149,20,'Piston force',161,28,upward)+arrow(149,97,149,143,'Weight',161,137,downward)+textAt(149,84,'Gate');
  }else if(owner===1){
   title='Free-body diagram of the sled · side view';
   content=box(140,66,58,36)+'<path d="M30 105H308" stroke="'+ink+'" stroke-width="2"/>'+arrow(168,85,168,142,'Weight',182,140,downward)+arrow(168,85,168,21,'Normal force',181,25,upward)+arrow(168,85,66,85,'Friction',44,74,downward)+textAt(260,82,'Slides right');
@@ -1164,13 +1222,11 @@ function researchPrediction(owner){
  const fallback=researchChecks[owner];
  const lab=labSessions.get(owner);
  if(owner===0){
-  const weight=lab?.load??(solved.has(owner)?680:400);
-  const force=scienceLabs.liftDifference(weight);
-  return {clue:'The platform weighs 520 N. '+(lab?.load||solved.has(owner)?'Your counterweight is ':'Suppose the counterweight is ')+weight+' N.',
-   question:'Which way would the platform start accelerating if both ends could move freely?',
-   choices:['Upward','Downward','No acceleration'],answer:force>0?0:force<0?1:2,visual:'force',
-   hint:'The heavier side of the rope moves down.',
-   explanation:force===0?'The two sides balance, so the platform has no acceleration.':'The '+(force<0?'platform':'counterweight')+' is heavier by '+Math.abs(force)+' N, so the platform accelerates '+(force<0?'downward':'upward')+'.'};
+  return {clue:'The diagram shows a trial with a 400 N counterweight.',
+   question:'If you replace it with a 520 N counterweight and release the lift from rest, how will the platform start?',
+   choices:['Upward','Downward','No acceleration'],answer:2,visual:'force',
+   hint:'Compare the two weight arrows. What changes when the new counterweight matches the occupied platform?',
+   explanation:'Both sides weigh 520 N, so the lift stays at rest. To raise the platform, the counterweight has to weigh more.'};
  }
  if(owner===1){
   const run=lab?.trial??(solved.has(owner)?scienceLabs.friction(1):null);
@@ -1203,7 +1259,7 @@ function inspectResearch(){
  if(recovered.has(owner)){openPlan(owner,true,source);return;}
  const check=researchPrediction(owner);
  function ask(feedback=''){
-  dialog('<h2>'+source.name+' challenge</h2><p>'+check.clue+'</p><p><strong>'+check.question+'</strong></p>'+
+  dialog('<h2>'+source.name+' challenge</h2>'+(owner===0?researchDiagram(owner):'')+'<p>'+check.clue+'</p><p><strong>'+check.question+'</strong></p>'+
    (feedback?'<p class="report-feedback" role="status">'+feedback+'</p>':'')+
    '<div class="dialog-choices" id="topics"></div><hr><button id="dismiss">Back to the room</button>',{focus:false});
   check.choices.forEach((choice,index)=>{
@@ -1297,9 +1353,9 @@ const operators={
  6:['Guardian technician Kit',443,266,'The guardian is racing on its test rail. The repair checks are in. The brake can only catch when the coupled pair comes to rest.','Guardian brake'],
  9:['Teo',481,213,'The drawbridge stayed up after the outage. I’m not getting enough torque at the winch.','East Garden drawbridge']
 };
+const trialReadings=new Map();
 const consulted=new Set(), researchRequired=new Set(), reported=new Set(), discussed=new Map();
 const confirmedCount=()=>[0,1,2,3,4,5].filter(i=>reported.has(i)).length;
-const operatorCoats={0:'#bc9361',1:'#927d5a',2:'#8199a3',3:'#94667d',4:'#63978d',5:'#b08e58',6:'#8f9d83',9:'#bf9360'};
 const operatorPoint=()=>operators[roomIndex]?{x:operators[roomIndex][1],y:operators[roomIndex][2]}:null;
 function refreshProgress(){
  const inside=observatory.inside(roomIndex);
@@ -1338,9 +1394,9 @@ function operatorNext(index){
 }
 const castleDebriefs={
  0:{
-  question:'The platform rose with the 680 N counterweight. What made it rise?',
-  choices:['The platform weighed more, so the rope pulled it up.','The counterweight weighed more. It moved down and pulled the platform up.','The two weights balanced, so the platform rose on its own.'],
-  answer:1,hint:'Compare 680 N with the 520 N occupied platform. The heavier side moves down.'
+  question:'In your successful trial, the counterweight weighed 680 N and the occupied platform weighed 520 N. Why did the platform rise?',
+  choices:['The rope tension equalled the platform’s weight, so the platform accelerated upward.','The heavier counterweight accelerated down, pulling the lighter platform up.','The pulley reduced the platform’s weight, so the platform rose under its own weight.'],
+  answer:1,hint:'If the forces on the platform were balanced, could it accelerate upward from rest?'
  },
  1:{
   question:'All three lanes used the same launch speed. Why did the stone lane stop the sled in the gold zone?',
@@ -1473,6 +1529,7 @@ function saveProgress(){
   visited:[...visited],tools:[...acquired],readings:[...recordedReadings],fieldReports:[...fieldReports],
   discussed:[...discussed].map(([name,topics])=>[name,[...topics]]),
   gardenBridge,surveyRead,shortcutOpen,finished,vistaSeen,arrived,observatory:observatoryState,
+  trialReadings:[...trialReadings],
   labs:[...labSessions].filter(([id])=>!reported.has(id)&&!needsReport(id)).map(([id,lab])=>[id,scienceLabs.snapshot(lab)]),
   curiosities:[...curiosities],exploration:exploration.snapshot(explorationState)
  };
@@ -1540,6 +1597,11 @@ function resumeRun(){
  observatoryState=observatory.restore(run.observatory);
  explorationState=exploration.restore(run.exploration,run.room===calibrationRoom);
  restore(curiosities,run.curiosities,questExtras.known);
+ if(Array.isArray(run.trialReadings))for(const entry of run.trialReadings){
+  if(Array.isArray(entry)&&Number.isInteger(entry[0])&&rooms[entry[0]]&&typeof entry[1]==='string'){
+   trialReadings.set(entry[0],entry[1].slice(0,96));
+  }
+ }
  if(Array.isArray(run.labs))for(const entry of run.labs){
   if(!Array.isArray(entry))continue;
   const [id,lab]=entry;
@@ -1582,7 +1644,13 @@ function syncUtilityButtons(){
  const interactButton=$('interact');
  interactButton.lastChild.textContent=' '+(target?'Interact':verb);
  const actionKey=lastInput==='touch'?'Use':usingPadLabels?'A':'E';
- $('active-action').textContent=target?actionKey+' · '+label:'';
+ const reading=trialReadings.get(roomIndex)||'';
+ const readingElement=$('trial-reading');
+ if(readingElement.textContent!==reading)readingElement.textContent=reading;
+ readingElement.hidden=!reading;
+ const action=$('active-action');
+ action.textContent=target?actionKey+' · '+label:'';
+ action.setAttribute('data-guidance',String(target?.kind==='lab'&&Boolean(labAccessMessage(roomIndex))));
  interactButton.setAttribute('aria-label',label);
  interactButton.setAttribute('data-touch-label',target?'Use':verb);
  interactButton.title=label;
@@ -1623,7 +1691,7 @@ const operatorFacing=new Map(), observatoryFacing=new Map();
 function clearSession(){
  sessionId++;attemptId++;
  roomTransition=null;roomEntry=null;repairFlash=null;observatoryRepair=null;guardianShift=null;
- labSessions.clear();fieldReports.clear();curiosities.clear();activeOverlays.clear();
+ labSessions.clear();trialReadings.clear();fieldReports.clear();curiosities.clear();activeOverlays.clear();
  explorationState=exploration.fresh();
  for(const list of [recovered,consulted,researchRequired,reported,solved,visited,acquired,recordedReadings,attempts,discussed])list.clear();
  operatorFacing.clear();observatoryFacing.clear();
@@ -1708,7 +1776,12 @@ $('menu').onclick=repairFrontMenu;
 const nearDoor=()=>links[roomIndex].find(door=>nearby(threshold[door.dir],33));
 const miraLook={sprite:'mira',coat:'#9b759a',hair:'#382e40'};
 const mira={x:273,y:105,walking:false};
-const people={8:{x:244,y:113,coat:'#ae7655',hair:'#55434b'},10:{x:468,y:231,coat:'#7e9160',hair:'#403c34'},11:{x:225,y:224,coat:'#637f98',hair:'#423540'},16:{x:461,y:201,coat:'#9a674d',hair:'#493434'},22:{x:250,y:201,coat:'#8f9d83',hair:'#443f39'},7:{x:487,y:118,coat:'#817eaa',hair:'#c2b39c'},9:{x:320,y:210,coat:'#bf9360',hair:'#41342d'},14:{x:542,y:188,coat:'#9c7659',hair:'#322d32'}};
+const people={
+ 7:{x:487,y:118,sprite:'inez'},8:{x:244,y:113,sprite:'ada'},
+ 9:{x:320,y:210,sprite:'teo'},10:{x:468,y:231,sprite:'ren'},
+ 11:{x:225,y:224,sprite:'jo'},14:{x:542,y:188,sprite:'neri'},
+ 16:{x:461,y:201,sprite:'bea'},22:{x:250,y:201,sprite:'kit'}
+};
 const patrols={
  8:[[244,151],[280,151],[280,113],[244,113]],
  10:[[451,235],[475,267],[498,241],[468,231]],
@@ -1728,7 +1801,7 @@ const students=Object.fromEntries(Object.entries({
  9:[['Noah'],['Zoe']]
 }).map(([id,group])=>[id,group.map(([name,x,y],i)=>({
  name,x:x??[112,584][i],y:y??[281,286][i],
- coat:['#9b6d68','#557f87','#8a8055'][i],hair:['#3f3430','#654936','#40313f'][i]
+ sprite:['student-rose','student-teal','student-olive'][i]
 }))]));
 const studentQuestions={
  0:['Do I compare the counterweight with just Mira, or do I count the platform too?','When the platform rises, which way does the counterweight move?','If the two sides weighed the same, would the lift start moving on its own?'],
@@ -2018,6 +2091,8 @@ function lockedText(door){
  return 'Locked · '+door.required.filter(index=>!reported.has(index)).map(index=>rooms[index].name).join(' and ')+' still need attention.';
 }
 function calibrationFeedback(reading,wasComplete){
+ const plateReading=exploration.plateReading(explorationState);
+ if(plateReading)trialReadings.set(roomIndex,plateReading);
  if(!wasComplete&&explorationState.complete){
   music.playDiscoveryCue();
   refreshProgress();
@@ -2030,7 +2105,7 @@ function interactionLabel(target){
  switch(target.kind){
   case 'lab': {
    if(!consulted.has(roomIndex))return 'Speak to the operator first';
-   if(labAccessMessage(roomIndex))return 'Research through the '+plans[roomIndex].dir+' door';
+   if(labAccessMessage(roomIndex))return 'Research: '+plans[roomIndex].dir+' door';
    if(target.control.id==='force'&&!currentLab().calibrated)return 'Inspect locked force dial';
    if(roomIndex===6&&target.control.id.startsWith('launcher-')){
     const lab=currentLab();
@@ -2335,7 +2410,10 @@ function talkObservatory(person){
 function finishObservatoryAction(result,index){
  const repaired=observatory.done(observatoryState,index);
  const practicing=observatory.trialState(roomIndex,observatoryState)!==observatoryState;
- if(result.observation)observatory.record(observatoryState,index,practicing?'Practice':'Repair',result.observation);
+ if(result.observation){
+  observatory.record(observatoryState,index,practicing?'Practice':'Repair',result.observation);
+  trialReadings.set(roomIndex,result.observation.reading);
+ }
  if(result.solved&&!repaired){
   observatoryState.reports[index]={complete:true,confirmed:false,reading:result.reading};
   if(index===0)observatoryState.charge.held=false;
@@ -2352,6 +2430,7 @@ function confirmObservatoryRestart(){
   'This clears the four lab repairs, confirmations, Observatory readings, and the route to Nacre. Your castle and valley progress stays saved.',
   [['Restart labs',()=>{
    observatory.cancelTrials();
+   for(const id of trialReadings.keys())if(observatory.inside(id))trialReadings.delete(id);
    observatoryState=observatory.fresh();
    observatoryRepair=null;
    observatoryState.intro=true;
@@ -2520,10 +2599,33 @@ function tree(x,y,bright){
  ctx.fillStyle='#223d35';ctx.beginPath();ctx.arc(x,y-11,24,0,Math.PI*2);ctx.fill();
  ctx.fillStyle=bright;ctx.beginPath();ctx.arc(x-7,y-17,17,0,Math.PI*2);ctx.fill();
 }
+function contactShadow(x,y,rx,ry=4){
+ ctx.fillStyle='#15151a59';
+ ctx.beginPath();
+ ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);
+ ctx.fill();
+}
+function lightPool(x,y,rx,ry,color,strength=1){
+ ctx.save();
+ ctx.translate(x,y);
+ ctx.scale(rx,ry);
+ ctx.globalAlpha=strength;
+ const gradient=ctx.createRadialGradient(0,0,.06,0,0,1);
+ gradient.addColorStop(0,color+'55');gradient.addColorStop(.55,color+'25');gradient.addColorStop(1,color+'00');
+ ctx.fillStyle=gradient;ctx.fillRect(-1,-1,2,2);
+ ctx.restore();
+}
 function lantern(x,y){
- const g=ctx.createRadialGradient(x,y,1,x,y,38);
- g.addColorStop(0,'#ffc16b66');g.addColorStop(1,'#ffc16b00');
- rect(x-38,y-38,76,76,g);rect(x-4,y-5,8,11,'#8e673d');rect(x-2,y-3,4,6,'#ffd68a');
+ const tick=reducedMotion()?0:Math.floor(time*8+x)%4;
+ const glow=[.76,.84,.72,.79][tick];
+ lightPool(x,y+29,52,17,'#eaa55f',glow);
+ lightPool(x,y,32,31,'#ffc16b',glow);
+ rect(x-4,y-5,8,11,'#8e673d');
+ rect(x-2,y-3,4,6,'#ffd68a');
+ rect(x-1,y-3-tick%2,2,3,'#fff2bd');
+}
+function setWeightDust({x,y}){
+ if(!reducedMotion())weightDust={room:roomIndex,x,y,start:time};
 }
 function stoneWall(){
  rect(0,0,720,49,'#293337');rect(0,40,720,10,'#7b8e89');
@@ -2537,15 +2639,30 @@ function stoneWall(){
 function arch(door){
  const {x,y}=threshold[door.dir];
  const open=isOpen(door);
+ const horizontal=door.dir==='east'||door.dir==='west';
+ if(roomIndex===0&&horizontal){
+  const postX=door.dir==='west'?14:695;
+  for(const edge of [y-26,y+26]){
+   rect(postX-6,edge-1,13,5,'#3a4a36');
+   rect(postX-4,edge-14,8,16,'#67503c');
+   rect(postX-3,edge-14,3,13,'#a0784e');
+   rect(postX-5,edge-16,10,4,'#c4a16d');
+  }
+  if(!open)rect(x-4,y-5,8,8,'#ecac63');
+  return;
+ }
+ const shedExit=roomIndex===calibrationRoom&&door.dir==='west';
+ const warm=shedExit||(roomIndex>0&&(roomIndex<9||room().planOwner!==undefined));
+ const frame=shedExit?'#ad8058':warm?'#b29a78':'#8c9d91';
  if(door.dir==='north'||door.dir==='south'){
   const yy=door.dir==='north'?0:305;
-  rect(x-30,yy,60,55,'#8c9d91');rect(x-23,yy,46,55,open?'#161f26':'#624f44');
-  rect(x-18,yy+5,36,45,open?'#253439':'#84684f');
-  for(let i=0;i<4;i++)rect(x-14+i*9,yy+5,2,43,open?'#314248':'#553f38');
+  rect(x-30,yy,60,55,frame);rect(x-23,yy,46,55,open?(warm?'#373132':'#161f26'):'#624f44');
+  rect(x-18,yy+5,36,45,open?(warm?'#504339':'#253439'):'#84684f');
+  for(let i=0;i<4;i++)rect(x-14+i*9,yy+5,2,43,open?(warm?'#695647':'#314248'):'#553f38');
  }else{
   const xx=door.dir==='west'?0:674;
-  rect(xx,y-27,46,54,'#8c9d91');rect(xx,y-20,46,40,open?'#263438':'#685242');
-  for(let i=0;i<3;i++)rect(xx,y-14+i*13,46,2,open?'#364c50':'#493a36');
+  rect(xx,y-27,46,54,frame);rect(xx,y-20,46,40,open?(warm?'#4a4039':'#263438'):'#685242');
+  for(let i=0;i<3;i++)rect(xx,y-14+i*13,46,2,open?(warm?'#6a5a4a':'#364c50'):'#493a36');
  }
  if(!open)rect(x-4,y-5,8,8,'#ecac63');
  if(open&&room().kind&&door.to!==plans[roomIndex]?.room&&repairFlash?.room===roomIndex&&!reducedMotion()){
@@ -2623,44 +2740,48 @@ function drawFigures(figures){
 function drawAdventureRoom(){
  const outside=roomIndex===0||(roomIndex>=9&&roomIndex<16);
  const lower=roomIndex===8||[3,4,5,6].includes(roomIndex);
- rect(0,0,720,360,outside?'#304b3e':'#30444b');
- for(let y=0;y<360;y+=24)for(let x=0;x<720;x+=24){
-  const n=(x*7+y*17+x*y)%61;
-  rect(x,y,23,23,outside?(n%2?'#395640':'#3d5943'):lower?(n%2?'#43525d':'#3b4b56'):(n%2?'#53645f':'#4d605a'));
-  if(n%3===0)rect(x+5,y+5,3,2,outside?'#84945d':'#718382');
- }
- if(outside){
-  rect(36,227,648,39,'#8e8268');if(roomIndex===0){rect(121,63,33,181,'#8e8268');rect(131,57,153,26,'#8e8268');}rect(595,50,55,192,'#8e8268');
-  for(let x=49;x<680;x+=26)rect(x,252,11,2,'#ac9b77');
-  for(const [x,y] of [[65,90],[53,190],[81,304],[566,303],[665,86]])tree(x,y,'#55765a');
-  if(roomIndex===9){
-   rect(105,58,470,88,'#293f4b');rect(111,65,458,74,'#466c76');
-   for(let x=115;x<538;x+=55)rect(x+(Math.sin(time*1.2+x)*8),92,25,2,'#83a9a6');
-   for(let x=120;x<577;x+=35)rect(x,151,21,8,'#677a65');
-  }else{
-   rect(103,16,509,37,'#344347');
-   for(let x=110;x<601;x+=43)rect(x,22,39,15,'#4b6060');
+ const backdrop=roomImages[roomIndex];
+ const hallLit=reported.has(1)&&reported.has(2);
+ const painted=hasRoomArt(roomIndex);
+ if(painted)ctx.drawImage(backdrop,0,0,720,360);
+ else if(roomIndex===7)drawSandstoneHall({rect,line},hallLit);
+ else{
+  rect(0,0,720,360,outside?'#304b3e':'#30444b');
+  for(let y=0;y<360;y+=24)for(let x=0;x<720;x+=24){
+   const n=(x*7+y*17+x*y)%61;
+   rect(x,y,23,23,outside?(n%2?'#395640':'#3d5943'):lower?(n%2?'#43525d':'#3b4b56'):(n%2?'#53645f':'#4d605a'));
+   if(n%3===0)rect(x+5,y+5,3,2,outside?'#84945d':'#718382');
   }
- }else{
-  stoneWall();
-  if(!room().kind){
-   rect(155,94,270,101,lower?'#475f7a':'#643f43');rect(161,100,258,89,lower?'#53728c':'#785156');
-   for(let y=111;y<181;y+=11)rect(165,y,250,1,lower?'#698d9b':'#a36f67');
-   for(const x of [99,544]){
-    rect(x,137,30,46,'#49615f');rect(x-4,133,38,7,'#97a99a');
+  if(outside){
+   rect(36,227,648,39,'#8e8268');if(roomIndex===0){rect(121,63,33,181,'#8e8268');rect(131,57,153,26,'#8e8268');}rect(595,50,55,192,'#8e8268');
+   for(let x=49;x<680;x+=26)rect(x,252,11,2,'#ac9b77');
+   for(const [x,y] of [[65,90],[53,190],[81,304],[566,303],[665,86]])tree(x,y,'#55765a');
+   if(roomIndex===9){
+    rect(105,58,470,88,'#293f4b');rect(111,65,458,74,'#466c76');
+    for(let x=115;x<538;x+=55)rect(x+(Math.sin(time*1.2+x)*8),92,25,2,'#83a9a6');
+    for(let x=120;x<577;x+=35)rect(x,151,21,8,'#677a65');
+   }else{
+    rect(103,16,509,37,'#344347');
+    for(let x=110;x<601;x+=43)rect(x,22,39,15,'#4b6060');
+   }
+  }else{
+   stoneWall();
+   if(!room().kind){
+    rect(155,94,270,101,lower?'#475f7a':'#643f43');rect(161,100,258,89,lower?'#53728c':'#785156');
+    for(let y=111;y<181;y+=11)rect(165,y,250,1,lower?'#698d9b':'#a36f67');
+    for(const x of [99,544]){
+     rect(x,137,30,46,'#49615f');rect(x-4,133,38,7,'#97a99a');
+    }
    }
   }
  }
- const backdrop=roomImages[roomIndex];
- const hallLit=reported.has(1)&&reported.has(2);
- if(roomIndex===7)drawSandstoneHall({rect,line},hallLit);
- else if(backdrop?.complete&&backdrop.naturalWidth)ctx.drawImage(backdrop,0,0,720,360);
- if(outside){
-  restoreNorthTrailGround(roomIndex,ctx,backdrop,meadowGroundArt);
-  drawTrailClearance(roomIndex,{rect});
+ if(outside&&(roomIndex===11||!painted))drawTrailClearance(roomIndex,{rect});
+ if(outside||!painted){
+  const tint=room().planOwner!==undefined?'#717b5e':lower?'#597080':'#86644f';
+  drawBackdropDetails(roomIndex,{rect,line},outside?'outdoor':'castle',tint);
  }
- const tint=room().planOwner!==undefined?'#717b5e':lower?'#597080':'#86644f';
- drawBackdropDetails(roomIndex,{rect,line},outside?'outdoor':'castle',tint);
+ if(!outside)wallBaseShadow({rect},roomIndex===7&&!painted?63:66);
+ if(roomIndex===13)lightPool(542,174,69,24,'#7ed1e2',.77);
  if(!outside)for(const x of [64,560]){
   lantern(x,49);
   if(hallLit&&roomIndex===7){lantern(x,53);rect(x-2,45,4,7,'#fff1b3');}
@@ -2676,7 +2797,7 @@ function drawAdventureRoom(){
   }
   ctx.restore();
  }
- if(roomIndex===11)drawValleyLight({rect,line},reducedMotion()?0:time);
+ if(roomIndex===9||roomIndex===11)drawWaterGlints(roomIndex,{rect},reducedMotion()?0:time);
 
  for(const door of links[roomIndex]){
   if(roomIndex<10||roomIndex>=16)arch(door);
@@ -2708,36 +2829,53 @@ function drawAdventureRoom(){
  }
  if(room().planOwner!==undefined){
   const source=researchSource(room().planOwner);
+  contactShadow(source.x,source.y-4,(source.bounds[1]-source.bounds[0])*.46,5);
   if(source.kind==='paper'){
-   rect(319,130,82,39,'#775b40');rect(315,127,90,26,'#b18c62');
-   rect(338,129,43,20,'#efe0a6');
-   for(let y=134;y<=144;y+=4)rect(343,y,28,1,'#755e48');
+   drawProp('drafting',314,122);
    lantern(393,123);
   }else if(source.kind==='book'){
-   rect(194,116,68,28,'#785c48');rect(194,116,68,5,'#b08d63');
-   rect(207,120,40,18,'#442e2b');rect(210,121,34,14,'#efe0a6');rect(226,121,2,14,'#937b56');
-   for(let y=123;y<132;y+=3){rect(212,y,10,1,'#ab9272');rect(230,y,10,1,'#ab9272');}
+   drawProp('lectern',194,113);
   }else{
-   rect(459,111,69,33,'#715543');rect(473,106,41,27,'#293b3d');
-   rect(477,110,33,16,'#75a992');for(let y=114;y<123;y+=4)rect(481,y,23,1,'#b4dbb6');
-   rect(470,136,45,5,'#9ba18a');
+   drawProp('terminal',458,105);
+   if(!reducedMotion()){
+    ctx.save();
+    ctx.globalAlpha=.14+.06*Math.sin(time*3);
+    rect(480,113+Math.floor(time*4)%8,26,1,'#d5ebbe');
+    ctx.restore();
+   }
   }
   if(!recovered.has(room().planOwner))label('?',source.x,source.y-48,'#ffe2a1',15);
  }
  if(roomIndex===9){
   riverBridge();
   const state=labArtState(9,gardenBridge);
-  scienceLabs.draw(currentLab(),time,{rect,line,label},gardenBridge,state);
+  scienceLabs.draw(currentLab(),time,{rect,line,label,prop:drawProp,shadow:contactShadow},gardenBridge,state);
  }
  if(roomIndex===9&&reported.has(9)){
   rect(535,221,122,15,'#4b422e');
   label('CALIBRATION SHED ›',596,232,'#fbdf9d',10);
  }
- if(roomIndex===13)drawObservatoryMarker();
+ if(roomIndex===13){
+  drawObservatoryMarker();
+  if(!arrived){
+   const {x,y}=observatory.entrance;
+   rect(x-36,y+5,72,15,'#483a36');
+   label('Observatory',x,y+16,'#fff0c7',10);
+  }
+ }
+ if(roomIndex===7)drawHallWayfinding({rect,label},reported);
  if(valleyInvestigations.stations[roomIndex])valleyInvestigations.drawStation(roomIndex,{rect,line},fieldReports.has(roomIndex));
 }
 function draw(){
  ctx.imageSmoothingEnabled=false;
+ const impact=roomIndex===6&&brakeImpact(animation,time);
+ const shake=impact&&impact.age<.12;
+ if(shake){
+  const step=Math.floor(impact.age*50);
+  rect(0,0,720,360,'#24232a');
+  ctx.save();
+  ctx.translate(step%2?2:-2,step%3===0?1:0);
+ }
  const transition=roomTransition;
  const slide=transition?.switched&&transition.outgoing;
  const progress=transition?Math.min(1,transition.elapsed/(2*passageHalf)):0;
@@ -2769,10 +2907,13 @@ function draw(){
   const elapsed=observatoryRepair?performance.now()-observatoryRepair.start:900;
   if(still||elapsed>=900)observatoryRepair=null;
   const phase=observatoryRepair?.room===roomIndex?elapsed/900:1;
-  observatory.drawRoom(roomIndex,{rect,line,label},observatoryState,doors,still?0:time,phase);
+  const backdrop=hasRoomArt(roomIndex)?()=>ctx.drawImage(roomImages[roomIndex],0,0,720,360):null;
+  observatory.drawRoom(roomIndex,{rect,line,label,shadow:contactShadow,pool:lightPool},observatoryState,doors,still?0:time,phase,backdrop);
  }
  else if(roomIndex===calibrationRoom){
-  exploration.draw(explorationState,{rect,line,label});
+  const painted=hasRoomArt(roomIndex);
+  if(painted)ctx.drawImage(roomImages[roomIndex],0,0,720,360);
+  exploration.draw(explorationState,{rect,line,label,prop:drawProp,shadow:contactShadow,motion:!reducedMotion()},painted);
   for(const door of links[roomIndex])arch(door);
  }else drawAdventureRoom();
  if(overlayIsOn(roomIndex)){
@@ -2784,7 +2925,7 @@ function draw(){
  const figures=observatory.backgroundPeople(roomIndex).map(person=>({point:person,look:person,facing:person.facing}));
  for(const person of observatory.people(roomIndex,observatoryState))figures.push({point:person,look:person,facing:observatoryFacing.get(person.name)||'south'});
  const op=operatorPoint(), npc=roomIndex===9?null:talkPoint();
- if(op)figures.push({point:op,look:{sprite:roomIndex===0?'sol':undefined,coat:operatorCoats[roomIndex],hair:'#53484a'},facing:operatorFacing.get(roomIndex)||'south'});
+ if(op)figures.push({point:op,look:{name:operators[roomIndex][0]},facing:operatorFacing.get(roomIndex)||'south'});
  if(roomIndex===0&&solved.has(0))figures.push({point:mira,look:miraLook,facing:mira.facing||'south'});
  if(roomIndex===calibrationRoom)figures.push({point:explorationState.mira,look:miraLook,facing:explorationState.mira.facing});
  if(npc&&npc!==mira)figures.push({point:npc,look:npc,facing:npc.facing||'south'});
@@ -2792,6 +2933,9 @@ function draw(){
  const labSetup=inObservatory?observatory.trialState(roomIndex,observatoryState):null;
  const observatoryLoad=observatory.floorFor(roomIndex)?.room===roomIndex?labSetup?.carry:null;
  if(avatar&&!onTitle)figures.push({point:player,look:avatars[avatar],facing:player.facing,load:currentLab()?.carry??observatoryLoad});
+ if(weightDust?.room===roomIndex&&!reducedMotion()){
+  dustPuff({rect},weightDust.x,weightDust.y+5,(time-weightDust.start)/.32);
+ }
  drawFigures(figures);
  if(avatar&&!onTitle&&!overlayIsOn(roomIndex)&&roomIndex===observatory.floors[3].room&&labSetup.coil.compass&&(labSetup!==observatoryState||!observatory.done(observatoryState,3))){
   rect(player.x-8,player.y-39,16,15,'#263438');
@@ -2844,6 +2988,7 @@ function draw(){
   const shade=transition.portal?'22,31,51':'13,19,23';
   rect(0,0,720,360,'rgba('+shade+','+ease+')');
  }
+ if(shake)ctx.restore();
 };
 frame=function(now){
  advanceSpeech(now);

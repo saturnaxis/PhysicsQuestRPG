@@ -1,6 +1,6 @@
 # Physics Quest: Mechanics Castle
 
-Current release **0.2.21**. See the [full changelog](CHANGELOG.md).
+Current release **0.2.29**. See the [full changelog](CHANGELOG.md).
 
 **Physics Quest: Mechanics Castle** is a top-down science adventure designed for East Texas A&M University’s planetarium lobby and Physics Day. Choose Rowan or Sage, rescue Mira from a stalled lift, and use mechanics experiments to restore the castle, then follow its records to the Desert Observatory. The game runs in a browser and can be installed as a progressive web app (PWA) for portrait or landscape play on a phone or tablet.
 
@@ -116,13 +116,13 @@ Music starts at 10% volume and can be adjusted or muted from the title and pause
 
 ## Recent changes
 
+- **[0.2.29](CHANGELOG.md#0229)** Package the private build for GitHub Pages and include the source, reproducible art tools, and rebuilt offline site.
+- **[0.2.28](CHANGELOG.md#0228)** Pin trial readings separately from the next action and save them with progress. Add the 520 N balance case, correct the lift diagram, revise the research and debrief, and signpost the Great Hall and Observatory entrance.
+- **[0.2.27](CHANGELOG.md#0227)** Add flickering lanterns, colored light pools, contact shadows, and reduced-motion-aware apparatus effects. Cache Silkscreen for offline play, frame portraits in brass, and polish the hydraulic labels and Calibration Shed.
+- **[0.2.26](CHANGELOG.md#0226)** Align the Sandstone Pass trail with the service gate and the matching route in Service Gulch.
+- **[0.2.25](CHANGELOG.md#0225)** Add a pixel-art prop atlas for research furniture, lab apparatus, and the Calibration Shed. Trim redundant labels while keeping numeric readouts visible.
+- **[0.2.24](CHANGELOG.md#0224)** Upgrade character walk and carry sprites, refresh the rail carts, and redraw the Flywheel Guardian with separate flywheel and visor layers.
+- **[0.2.23](CHANGELOG.md#0223)** Roll the new backdrop style out across all 36 rooms and refine the three pilot rooms.
+- **[0.2.22](CHANGELOG.md#0222)** Introduce the Castle Approach, Friction Lab, and Observatory Floor 1 art pilots.
 - **[0.2.21](CHANGELOG.md#0221)** Repaint three world scenes, animate room travel and repair cues, and add a two-setup Guardian finale with relaxed timing and a Phase 2 checkpoint.
 - **[0.2.20](CHANGELOG.md#0220)** Package the current game for GitHub Pages, adopt area-based release numbers, and split the release history into a changelog and a ten-entry README summary.
-- **[0.2.19](CHANGELOG.md#0219)** Require an explanation of why each of the eight Castle repairs worked. Incorrect answers provide a hint and allow another try.
-- **[0.2.18](CHANGELOG.md#0218)** Lower reset controls in six Castle rooms and require research after a failed trial. Successful intermediate steps and completed repairs can proceed directly.
-- **[0.2.17](CHANGELOG.md#0217)** Move the full trees off the north paths, add an original meadow texture, and make locked apparatus name the research room and door.
-- **[0.2.16](CHANGELOG.md#0216)** Widen key outdoor routes, put repair indicators beside apparatus controls, and add outdoor and indoor scenery.
-- **[0.2.15](CHANGELOG.md#0215)** Keep the playfield size fixed. Put short readings beside actions and open longer messages in a bottom overlay.
-- **[0.2.14](CHANGELOG.md#0214)** Prevent directions from clipping in the status panel and make overflow readable on short screens.
-- **[0.2.13](CHANGELOG.md#0213)** Fix Skip opening during and after both Castle text crawls.
-- **[0.2.12](CHANGELOG.md#0212)** Add the Garden Calibration Shed, Mira’s interlock task, Calibration Badges, Sprint Boots, Vector Goggles, and the Stargate II clue.
